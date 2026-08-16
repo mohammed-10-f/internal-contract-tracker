@@ -24,6 +24,12 @@ const permLabel = {
   manage_data:"إدارة البيانات", view_audit_log:"سجل النشاط",
   export_audit_log:"تصدير سجل النشاط"
 };
+const roleDefaults = {
+  admin: Object.keys(permLabel),
+  requester: ["view_records","upload_contracts","approve","export","view_stats","view_closed"],
+  region: ["view_records","respond_region","view_closed","view_stats","reassign_records"],
+  viewer: ["view_records","view_closed"]
+};
 const permGroups = [
   {title:"المعاملات", items:["view_records","upload_contracts","respond_region","approve","stop_records","cancel_records","reassign_records","delegate_records","view_closed","reactivate_records","export","view_stats"]},
   {title:"الإدارة", items:["manage_users","manage_regions","manage_delegations","settings","manage_data","view_audit_log","export_audit_log"]}
@@ -116,7 +122,7 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
-      <footer class="appFooter"><span>Contract Control</span><b>V17.0</b><span>نظام متابعة العقود</span></footer>
+      <footer class="appFooter"><span>Contract Control</span><b>V17.1</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
@@ -203,14 +209,18 @@ async function loadMoreRecords(btn){
  try{const qs=new URLSearchParams({q,status,region,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
 function recordCard(r){
   const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  return `<article class="recordCard" onclick="openRecord(${r.id})"><div class="recordAccent ${r.status}"></div><div class="recordHead"><div><span class="recordNo">#${r.id}</span><h3>${esc(r.employee_name)}</h3><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div><div class="recordMeta"><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span><span>رفع <b>${fmtDate(r.created_at)}</b></span><span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span></div><div class="recordFooter"><div><small>${active?"مدة المعاملة":"مدة المعاملة النهائية"}</small><strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></div><div class="cardActions">${(ME?.role==="region"&&["waiting_region","returned"].includes(r.status)&&can("respond_region"))?`<button class="quickBtn" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`:""}${(can("approve")&&["region_documented","region_withdrawn"].includes(r.status))?`<button class="quickBtn approve" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}<button class="openBtn" onclick="event.stopPropagation();openRecord(${r.id})">التفاصيل ↗</button></div></div></article>`;
+  return `<article class="recordCard" onclick="openRecord(${r.id})"><div class="recordAccent ${r.status}"></div><div class="recordHead"><div><div class="recordNoBlock"><span class="recordNo">#${r.id}</span>${r.transaction_no?`<span class="actionTxn">معاملة الإجراء: ${esc(r.transaction_no)}</span>`:""}${r.interruption_transaction_no?`<span class="interruptionTxn">الانقطاع: ${esc(r.interruption_transaction_no)}</span>`:""}</div><h3>${esc(r.employee_name)}</h3><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div><div class="recordMeta"><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span><span>رفع <b>${fmtDate(r.created_at)}</b></span><span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span></div><div class="recordFooter"><div><small>${active?"مدة المعاملة":"مدة المعاملة النهائية"}</small><strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></div><div class="cardActions">${(ME?.role==="region"&&["waiting_region","returned"].includes(r.status)&&can("respond_region"))?`<button class="quickBtn" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`:""}${(can("approve")&&["region_documented","region_withdrawn"].includes(r.status))?`<button class="quickBtn approve" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}<button class="openBtn" onclick="event.stopPropagation();openRecord(${r.id})">التفاصيل ↗</button></div></div></article>`;
 }
 async function quickRegion(id){
-  const d=await api(`/api/records/${id}`);const r=d.record;document.body.insertAdjacentHTML("beforeend",`<div class="modalShade quickShade"><div class="smallModal quickModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION RESPONSE</span><h2>إفادة سريعة</h2><p><b>${esc(r.employee_name)}</b> · ${esc(r.employee_no)} · ${esc(r.region)}</p><textarea id="quickRegionNote" placeholder="اكتب الإفادة"></textarea><div class="actionButtons"><button class="primary" onclick="quickRegionSubmit(${id},'documented')">تم التوثيق</button><button class="danger" onclick="quickRegionWithdraw(${id})">منسحب الموظف</button></div><div id="quickWithdrawArea"></div></div></div>`);
+  document.querySelector(".quickActionStrip")?.remove();
+  const d=await api(`/api/records/${id}`),r=d.record;
+  const cards=document.querySelector("#recordCards"); if(!cards)return;
+  cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}"><div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إجراء المعاملة #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div><div class="qaField"><small>رقم معاملة التعيين</small><b>${esc(r.transaction_no||"غير مسجل")}</b></div><div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تسجيل الإفادة</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">إفادة انسحاب</button></div><div id="quickRegionArea" style="grid-column:1/-1"></div></section>`);
+  document.querySelector(".quickActionStrip")?.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
-async function quickRegionSubmit(id,kind){const note=document.querySelector("#quickRegionNote")?.value||"";if(kind==="documented"){try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickShade")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}}}
-function quickRegionWithdraw(id){const a=document.querySelector("#quickWithdrawArea");a.innerHTML=`<div class="inlineGrid"><label>تاريخ نهاية الدوام<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع/الإجراء<input id="qTxn"></label></div><button class="danger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل الانسحاب</button>`}
-async function quickRegionWithdrawSubmit(id){const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";if(!end||!txn)return toast("أكمل بيانات الانسحاب","err");try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickShade")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}}
+async function quickRegionSubmit(id,kind){const note=document.querySelector("#quickRegionNote")?.value||"";if(kind==="documented"){try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}}}
+function quickRegionWithdraw(id){const a=document.querySelector("#quickRegionArea");a.innerHTML=`<div class="inlineGrid"><label>تاريخ نهاية الدوام<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع/الإجراء<input id="qTxn"></label></div><button class="danger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل الانسحاب</button>`}
+async function quickRegionWithdrawSubmit(id){const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";if(!end||!txn)return toast("أكمل بيانات الانسحاب","err");try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}}
 async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد سريع من قائمة المعاملات"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
@@ -348,12 +358,22 @@ async function users(){
 }
 function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)return;const boxes=[...group.querySelectorAll("input[name=perm]")];const all=boxes.length&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 function userFormById(id){const x=usersCache.find(u=>Number(u.id)===Number(id));if(x)userForm(x);else toast("تعذر العثور على المستخدم","err");}
-function userForm(x={role:"requester",permissions:[]}){
-  const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${(x.permissions||[]).includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
+function userForm(x={role:"requester",permissions:roleDefaults.requester}){
+  const suggested=(x.id?((x.permissions&&x.permissions.length)?x.permissions:roleDefaults[x.role]||[]):(x.permissions&&x.permissions.length?x.permissions:roleDefaults[x.role]||[]));
+  const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
   document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">ACCESS CONTROL</span><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr"><option value="requester">HR</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
   const fr=document.querySelector("#fr"),freg=document.querySelector("#freg"); fr.value=x.role||"requester";
-  api("/api/regions").then(d=>{if(freg)freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""}>${esc(r.name||r)}</option>`).join("")}`});
+  api("/api/regions").then(d=>{if(freg)freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""} value="${esc(r.name||r)}">${esc(r.name||r)}</option>`).join("")}`});
+  const roleEl=document.querySelector("#fr");
+  if(roleEl){ roleEl.value=x.role||"requester"; roleEl.addEventListener("change",()=>{
+    const wanted=new Set(roleDefaults[roleEl.value]||[]);
+    modal.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value));
+    toast("تم اقتراح الصلاحيات المناسبة للدور");
+  }); }
+  const head=modal.querySelector(".permGrid");
+  if(head){ head.insertAdjacentHTML("beforebegin",`<div class="permSuggestion"><span><b>الصلاحيات المقترحة</b><small>يتم اقتراحها تلقائيًا حسب الدور ويمكن تعديلها قبل الحفظ.</small></span><button type="button" class="soft" onclick="applySuggestedPerms()">تطبيق المقترح</button></div>`); }
 }
+function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); toast("تم تطبيق الصلاحيات المقترحة"); }
 async function saveUser(id){
   const modal=document.querySelector(".userModal");
   const permissions=[...modal.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value);
