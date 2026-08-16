@@ -348,33 +348,25 @@ function recordCard(r){
   const canRegion=ME?.role==="region" && can("respond_region") && ["waiting_region","returned"].includes(r.status);
   const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["region_documented","region_withdrawn"].includes(r.status);
   const actionNo=r.interruption_transaction_no||"";
+  const status=statusLabel[r.status]||r.status||"—";
   const primary=canRegion
-    ? `<button class="cw-card-primary" onclick="quickRegion(${r.id})">إفادة</button>`
+    ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`
     : canApprove
-      ? `<button class="cw-card-primary" onclick="quickApprove(${r.id},'${r.status}')">اعتماد</button>`
-      : `<button class="cw-card-secondary" onclick="openRecord(${r.id})">عرض المعاملة</button>`;
-  return `<article class="cw-card" onclick="openRecord(${r.id})">
-    <div class="cw-card-main">
-      <div class="cw-card-top">
-        <div>
-          <span class="cw-card-id">CASE #${r.id}</span>
-          <h3>${esc(r.employee_name)}</h3>
-        </div>
-        <span class="cw-card-status ${finished?'done':''}">${esc(statusLabel[r.status]||r.status)}</span>
-      </div>
-      <div class="cw-card-meta">
-        <span>👤 ${esc(r.employee_no)}</span>
-        <span>📍 ${esc(r.region||"—")}</span>
-        <span>تعيين #${esc(r.transaction_no||"—")}</span>
-        ${actionNo?`<span>انقطاع/إجراء #${esc(actionNo)}</span>`:""}
-      </div>
-      <div class="cw-card-footer">
-        <span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span>
-        <span>آخر تحديث <b>${esc(r.duration_label||"—")}</b></span>
-      </div>
+      ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`
+      : `<button class="v3-action ghostAction" onclick="event.stopPropagation();openRecord(${r.id})">تفاصيل</button>`;
+
+  return `<div class="v3-case-row" onclick="openRecord(${r.id})">
+    <div class="v3-case-identity">
+      <span class="v3-case-number">#${r.id}</span>
+      <div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")}</small></div>
     </div>
-    <div class="cw-card-actions" onclick="event.stopPropagation()">${primary}<button class="cw-card-icon" aria-label="فتح التفاصيل" onclick="openRecord(${r.id})">↗</button></div>
-  </article>`;
+    <div class="v3-case-type"><span class="v3-label">النوع</span><b>تعيين</b></div>
+    <div class="v3-case-region"><span class="v3-label">الإقليم</span><b>${esc(r.region||"—")}</b></div>
+    <div class="v3-case-assignee"><span class="v3-label">المسؤول</span><b>${esc(r.region_user_name||"—")}</b></div>
+    <div class="v3-case-status"><span class="v3-status ${finished?'is-done':r.status==='region_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span></div>
+    <div class="v3-case-action">${primary}<button class="v3-open" aria-label="فتح">↗</button></div>
+    ${actionNo?`<div class="v3-case-extra">انقطاع / إجراء <b>#${esc(actionNo)}</b></div>`:""}
+  </div>`;
 }
 async function quickRegion(id){
   document.querySelector(".quickActionStrip")?.remove();
@@ -416,64 +408,72 @@ async function quickRegionWithdrawSubmit(id){
 async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
-  document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet cw-workspace-shell"><button class="modalClose" onclick="closeRecord()">×</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
+  document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet v4-sheet"><button class="modalClose v4-close" onclick="closeRecord()">×</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
   try{
     const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[],stages=d.stages||[];
     selectedRecord=r;
-    const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-    const stageDurations={hr:stageSecondsClient(stages,"hr"),region:stageSecondsClient(stages,"region"),approval:stageSecondsClient(stages,"approval")};
     const actionNo=r.interruption_transaction_no||"";
-    const withdrawState=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
+    const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
+    const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
 
-    const facts=[
-      info("رقم الموظف",r.employee_no),
-      info("الإقليم",r.region),
-      info("مسؤول الإقليم",r.region_user_name),
-      info("رقم معاملة التعيين",r.transaction_no),
-      info("تاريخ المباشرة",fmtDate(r.start_date)),
-      info("مقدم الطلب",r.requester_name)
-    ].join("");
+    const identity=`
+      <section class="v4-identity">
+        <div class="v4-identity-main">
+          <div class="v4-case-mark">CASE<br><b>#${r.id}</b></div>
+          <div>
+            <span class="v4-eyebrow">معاملة موظف</span>
+            <h2>${esc(r.employee_name)}</h2>
+            <p>${esc(r.employee_no||"—")} <i>•</i> ${esc(r.region||"—")} <i>•</i> تعيين</p>
+          </div>
+        </div>
+        <div class="v4-identity-status">
+          <span class="v4-status ${finished?'done':withdrawn?'danger':'pending'}">${esc(statusLabel[r.status]||r.status)}</span>
+          <small>آخر تحديث ${fmtDateTime(r.updated_at)}</small>
+        </div>
+      </section>`;
 
-    const summary=`
-      <div class="cw-summary">
-        <div class="cw-summary-item"><div class="label">الحالة</div><div class="value">${esc(statusLabel[r.status]||r.status)}</div></div>
-        <div class="cw-summary-item"><div class="label">آخر تحديث</div><div class="value">${fmtDateTime(r.updated_at)}</div></div>
-        <div class="cw-summary-item"><div class="label">مدة المعاملة</div><div class="value"><span class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</span></div></div>
-        ${withdrawState?`<div class="cw-summary-item"><div class="label">الانقطاع / اتخاذ الإجراء</div><div class="value">${esc(actionNo||"—")}</div></div><div class="cw-summary-item"><div class="label">آخر يوم عمل</div><div class="value">${fmtDate(r.end_date)}</div></div>`:""}
-      </div>`;
+    const overview=`
+      <section class="v4-panel">
+        <div class="v4-panel-head"><div><span class="v4-eyebrow">OVERVIEW</span><h3>ملخص المعاملة</h3></div></div>
+        <div class="v4-overview-grid">
+          <div><span>رقم معاملة التعيين</span><b>${esc(r.transaction_no||"—")}</b></div>
+          <div><span>تاريخ المباشرة</span><b>${fmtDate(r.start_date)}</b></div>
+          <div><span>مسؤول الإقليم</span><b>${esc(r.region_user_name||"—")}</b></div>
+          <div><span>مقدم الطلب</span><b>${esc(r.requester_name||"—")}</b></div>
+          ${withdrawn?`<div class="v4-withdraw-data"><span>الانقطاع / اتخاذ الإجراء</span><b>${esc(actionNo||"—")}</b></div><div class="v4-withdraw-data"><span>آخر يوم عمل</span><b>${fmtDate(r.end_date)}</b></div>`:""}
+        </div>
+      </section>`;
+
+    const process=`
+      <section class="v4-panel">
+        <div class="v4-panel-head"><div><span class="v4-eyebrow">WORKFLOW</span><h3>مسار المعاملة</h3></div></div>
+        ${horizontalTimeline(r,stages)}
+      </section>`;
 
     const activity=events.length?events.slice().reverse().map((e,n)=>`
-      <div class="cw-event">
-        <div class="cw-event-icon">${n===0?"●":"✓"}</div>
-        <div><div class="cw-event-title">${esc(e.action)}</div><div class="cw-event-meta">${fmtDateTime(e.created_at)} · ${esc(e.actor_name||"النظام")}</div>${e.note?`<div class="cw-event-note">${esc(e.note)}</div>`:""}</div>
+      <div class="v4-event">
+        <span class="v4-event-dot ${n===0?'current':''}"></span>
+        <div><b>${esc(e.action)}</b><small>${fmtDateTime(e.created_at)} · ${esc(e.actor_name||"النظام")}</small>${e.note?`<p>${esc(e.note)}</p>`:""}</div>
       </div>`).join(""):`<div class="emptyState">لا يوجد نشاط مسجل</div>`;
 
     let actionHtml=actionsHtml(r);
     document.querySelector(".recordSheet").innerHTML=`
-      <div class="cw-header">
-        <div class="cw-header-main">
-          <div>
-            <span class="cw-id">CASE #${r.id}</span>
-            <h2 class="cw-title">${esc(r.employee_name)}</h2>
-            <div class="cw-subtitle">ملف المعاملة التشغيلي</div>
-            <div class="cw-badges"><span class="cw-badge">👤 ${esc(r.employee_no)}</span><span class="cw-badge">📍 ${esc(r.region)}</span><span class="cw-badge">تعيين #${esc(r.transaction_no||"—")}</span></div>
-          </div>
-          <span class="cw-status ${withdrawState?'danger':finishedStatusClass(r.status)}">${esc(statusLabel[r.status]||r.status)}</span>
-        </div>
-      </div>
-
-      <div class="cw-layout">
-        <main class="cw-main">
-          <section class="cw-panel"><div class="cw-panel-title">ملخص المعاملة</div>${summary}</section>
-          <section class="cw-panel"><div class="cw-panel-title">بيانات المعاملة</div><div class="infoGrid">${facts}</div></section>
-          ${r.region_note?`<section class="cw-panel"><div class="cw-panel-title">إفادة مسؤول الإقليم</div><p>${esc(r.region_note)}</p></section>`:""}
-          <section class="cw-panel"><div class="cw-panel-title">الإجراء</div>${actionHtml}</section>
-          <section class="cw-panel"><div class="cw-panel-title">المستندات</div><div class="cw-actions-row"><button class="primary" onclick="openDocument(${r.id})">فتح المستند</button></div></section>
+      ${identity}
+      <div class="v4-body">
+        <main class="v4-main">
+          ${overview}
+          ${process}
+          ${r.region_note?`<section class="v4-panel v4-note"><div class="v4-panel-head"><h3>إفادة مسؤول الإقليم</h3></div><p>${esc(r.region_note)}</p></section>`:""}
+          <section class="v4-panel v4-action-panel">
+            <div class="v4-panel-head"><div><span class="v4-eyebrow">ACTION</span><h3>الإجراء</h3></div></div>
+            ${actionHtml}
+          </section>
         </main>
-
-        <aside class="cw-rail">
-          <section class="cw-panel"><div class="cw-panel-title">مسار المعاملة</div>${horizontalTimeline(r,stages)}</section>
-          <section class="cw-panel"><div class="cw-panel-title">سجل النشاط</div><div class="cw-activity">${activity}</div></section>
+        <aside class="v4-side">
+          <section class="v4-panel">
+            <div class="v4-panel-head"><div><span class="v4-eyebrow">ACTIVITY</span><h3>سجل المعاملة</h3></div></div>
+            <div class="v4-events">${activity}</div>
+          </section>
         </aside>
       </div>`;
     startLiveTimers();
@@ -487,7 +487,6 @@ function finishedStatusClass(status){
   if(["stopped","waiting_region","returned","region_withdrawn"].includes(status)) return "warning";
   return "";
 }
-function openDocument(id){ window.open(`/api/records/${id}/document`,"_blank"); }
 function stageSecondsClient(rows,stage){
   const now=Date.now();
   return (rows||[]).filter(x=>x.stage===stage).reduce((sum,x)=>{
@@ -504,28 +503,52 @@ function horizontalTimeline(r,stages){
  return `<div class="hTimeline">${defs.map((d,i)=>{const done=i<idx||i===0&&idx>0,active=i===idx;const sec=stageSecondsClient(stages,d[0]);return `<div class="hStep ${done?'done ':''}${active?'active ':''}"><div class="hNode">${d[2]}</div><b>${d[1]}</b><small>${done?'مكتمل':active?'المرحلة الحالية':'قادم'}${sec?` · ${duration(sec)}`:''}</small></div>${i<defs.length-1?`<div class="hLine ${done?'done':''}"></div>`:''}`}).join('')}</div>`;
 }
 function actionsHtml(r){
-  const admin=ME.role==="admin", regionCan=can("respond_region")&&(ME.role==="region"||admin), approveCan=can("approve")&&(ME.role==="requester"||admin), active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  let h=`<div class="actionHeader"><div><span class="eyebrow">NEXT ACTION</span><h3>${active?"الإجراء المتاح الآن":"حالة المعاملة"}</h3></div></div>`;
-  if((r.status==="waiting_region"||r.status==="returned")&&regionCan) h+=`<div class="actionBlock priority"><h4>إفادة مسؤول الإقليم</h4><textarea id="detailNote" placeholder="اكتب الإفادة المختصرة والواضحة"></textarea><div class="actionButtons"><button class="primary" onclick="perform(${r.id},'region_documented')">✓ تم التوثيق</button><button class="danger" onclick="withdrawForm(${r.id})">منسحب الموظف</button></div><div id="withdrawArea"></div></div>`;
-  if((r.status==="region_documented"||r.status==="region_withdrawn")&&approveCan) h+=`<div class="actionBlock"><h4>مراجعة HR واعتماد النتيجة</h4><textarea id="approveNote" placeholder="ملاحظة الاعتماد — اختيارية"></textarea><div class="actionButtons"><button class="primary" onclick="perform(${r.id},'final_documented','approveNote')">اعتماد وإغلاق</button>${r.status==="region_withdrawn"?`<button class="danger" onclick="perform(${r.id},'final_withdrawn','approveNote')">اعتماد الانسحاب</button>`:""}<button class="soft" onclick="perform(${r.id},'return','approveNote')">↩ إرجاع للتصحيح</button></div></div>`;
-  if(active&&can("stop_records")) h+=`<div class="actionBlock compact"><h4>إيقاف المعاملة</h4><textarea id="stopNote" placeholder="سبب الإيقاف — اختياري"></textarea><button class="danger wide" onclick="perform(${r.id},'stop','stopNote')">إيقاف المعاملة</button></div>`;
-  if(can("reassign_records")&&active) h+=`<div class="actionBlock compact"><h4>الإسناد</h4><p>الإسناد ينقل هذه المعاملة فقط لمسؤول إقليم آخر.</p><div id="reassignWrap">جاري تحميل المسؤولين…</div><textarea id="reassignNote" placeholder="سبب الإسناد — اختياري"></textarea><button class="primary wide" onclick="reassign(${r.id})">سحب وإسناد المعاملة</button></div>`;
-  if(can("reactivate_records")&&["stopped","final_documented","final_withdrawn","cancelled"].includes(r.status))h+=`<div class="actionBlock compact"><button class="primary wide" onclick="perform(${r.id},'reactivate')">↻ إعادة تنشيط المعاملة</button></div>`;
-  if(r.requester_note)h+=`<div class="notePanel"><b>ملاحظة</b><p>${esc(r.requester_note)}</p></div>`;
-  return h;
+  const admin=ME.role==="admin";
+  const regionCan=can("respond_region")&&(ME.role==="region"||admin);
+  const approveCan=can("approve")&&(ME.role==="requester"||admin);
+  const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
+
+  let h="";
+  if((r.status==="waiting_region"||r.status==="returned")&&regionCan){
+    h+=`<div class="v4-action-card">
+      <div class="v4-action-title"><span class="v4-action-icon">إف</span><div><b>إفادة الإقليم</b><small>اختر النتيجة ثم نفذ الإجراء</small></div></div>
+      <textarea id="detailNote" placeholder="ملاحظة الإفادة — اختيارية"></textarea>
+      <div class="v4-action-buttons">
+        <button class="v4-btn success" onclick="perform(${r.id},'region_documented')">✓ تم التوثيق</button>
+        <button class="v4-btn danger" onclick="withdrawForm(${r.id})">منسحب الموظف</button>
+      </div>
+      <div id="withdrawArea"></div>
+    </div>`;
+  }
+  if((r.status==="region_documented"||r.status==="region_withdrawn")&&approveCan){
+    h+=`<div class="v4-action-card approval">
+      <div class="v4-action-title"><span class="v4-action-icon">✓</span><div><b>مراجعة واعتماد</b><small>${r.status==="region_withdrawn"?"اعتماد الانسحاب أو إعادة المعاملة":"اعتماد التوثيق أو إعادة المعاملة"}</small></div></div>
+      <div class="v4-action-buttons">
+        ${r.status==="region_withdrawn"?`<button class="v4-btn danger" onclick="perform(${r.id},'final_withdrawn','approveNote')">اعتماد الانسحاب</button>`:`<button class="v4-btn success" onclick="perform(${r.id},'final_documented','approveNote')">اعتماد التوثيق</button>`}
+        <button class="v4-btn light" onclick="perform(${r.id},'return','approveNote')">↩ إرجاع للتصحيح</button>
+      </div>
+      <textarea id="approveNote" placeholder="ملاحظة الاعتماد — اختيارية"></textarea>
+    </div>`;
+  }
+  if(active&&can("stop_records"))
+    h+=`<div class="v4-secondary-action"><span>إيقاف المعاملة</span><button class="v4-btn danger small" onclick="perform(${r.id},'stop','stopNote')">إيقاف</button><textarea id="stopNote" placeholder="سبب الإيقاف — اختياري"></textarea></div>`;
+  if(can("reassign_records")&&active)
+    h+=`<div class="v4-secondary-action"><span>إسناد المعاملة</span><div id="reassignWrap">جاري تحميل المسؤولين…</div><textarea id="reassignNote" placeholder="سبب الإسناد — اختياري"></textarea><button class="v4-btn primary small" onclick="reassign(${r.id})">إسناد</button></div>`;
+  if(can("reactivate_records")&&["stopped","final_documented","final_withdrawn","cancelled"].includes(r.status))
+    h+=`<div class="v4-secondary-action"><span>إعادة تنشيط المعاملة</span><button class="v4-btn primary small" onclick="perform(${r.id},'reactivate')">إعادة تنشيط</button></div>`;
+  if(r.requester_note) h+=`<div class="v4-note-inline"><b>ملاحظة الطلب</b><p>${esc(r.requester_note)}</p></div>`;
+  return h||`<div class="v4-no-action"><span>✓</span><div><b>لا يوجد إجراء مطلوب</b><small>المعاملة في حالة مستقرة حاليًا.</small></div></div>`;
 }
 async function withdrawForm(id){
   const area=document.querySelector("#withdrawArea"); if(!area)return;
-  area.innerHTML=`
-    <div class="cw-decision cw-withdraw">
-      <div class="cw-decision-grid">
-        <div class="cw-field"><label>آخر يوم عمل</label><input id="withdrawEnd" type="date" onclick="this.showPicker?.()"></div>
-        <div class="cw-field"><label>رقم معاملة الانقطاع / اتخاذ الإجراء</label><input id="withdrawTxn" inputmode="numeric" placeholder="أدخل رقم المعاملة"></div>
-      </div>
-      <div class="cw-decision-actions">
-        <button class="danger" onclick="perform(${id},'region_withdrawn')">تسجيل إفادة الانسحاب</button>
-      </div>
-    </div>`;
+  area.innerHTML=`<div class="v4-withdraw-form">
+    <div class="v4-withdraw-head"><span>انسحاب الموظف</span><small>بيانات إلزامية</small></div>
+    <div class="v4-withdraw-fields">
+      <label><span>آخر يوم عمل</span><input id="withdrawEnd" type="date" onclick="this.showPicker?.()"></label>
+      <label><span>رقم الانقطاع / اتخاذ الإجراء</span><input id="withdrawTxn" inputmode="numeric" placeholder="رقم المعاملة"></label>
+    </div>
+    <div class="v4-withdraw-actions"><button class="v4-btn light small" onclick="document.querySelector('#withdrawArea').innerHTML=''">إلغاء</button><button class="v4-btn danger small" onclick="perform(${id},'region_withdrawn')">تسجيل الانسحاب</button></div>
+  </div>`;
 }
 async function perform(id,action,noteId="detailNote"){
   const note=document.querySelector("#"+noteId)?.value||"";
