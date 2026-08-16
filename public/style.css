@@ -133,3 +133,18 @@ select{appearance:none;-webkit-appearance:none;background-color:#fff;background-
 /* laptop fit */
 @media(min-width:901px) and (max-width:1300px){.main{padding-left:20px!important;padding-right:20px!important}.topbar{margin-left:-20px;margin-right:-20px;padding-left:18px;padding-right:18px}.topBrand strong{font-size:11px}.topNav button{padding:6px 8px;font-size:8px}.topNav button .navIcon{width:22px!important}.connection{display:none!important}.pageHeader h1{font-size:24px}}
 @media(max-width:900px){.main{padding:0 14px 88px!important}.topbar{margin:0 -14px;padding:10px 12px;min-height:64px;gap:8px}.topBrand{display:none}.topNav{display:none}.topActions{margin-right:auto}.pageHeader{padding:18px 0 12px}.pageHeader h1{font-size:22px}.workspacePill{display:none}.mobileBar{display:flex!important}}
+
+/* ===== V15.1 — ADMIN ACTIONS & MODALS HOTFIX ===== */
+.modalShade{position:fixed!important;inset:0!important;z-index:200!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:24px!important;background:rgba(5,18,38,.62)!important;backdrop-filter:blur(7px)!important;-webkit-backdrop-filter:blur(7px)!important;overflow:auto!important;pointer-events:auto!important}
+.smallModal,.userModal{pointer-events:auto!important;max-height:calc(100vh - 48px)!important;overflow-y:auto!important;overscroll-behavior:contain!important}
+.smallModal{width:min(480px,calc(100vw - 32px))!important;background:#fff!important;border:1px solid rgba(218,228,239,.9)!important;border-radius:22px!important;padding:28px!important;position:relative!important;box-shadow:0 30px 90px rgba(0,0,0,.24)!important}
+.userModal{width:min(820px,calc(100vw - 32px))!important;background:#f7f9fc!important;border:1px solid rgba(218,228,239,.9)!important;border-radius:24px!important;padding:30px!important;position:relative!important;box-shadow:0 30px 100px rgba(0,0,0,.28)!important}
+.modalClose{cursor:pointer!important;pointer-events:auto!important}
+.modalShade button,.modalShade input,.modalShade select,.modalShade textarea{pointer-events:auto!important}
+.userModal .formGrid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important}
+.userModal .permGrid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important}
+.userFormActions{display:flex!important;gap:10px!important;justify-content:flex-end!important}
+.userFormActions .primary{width:auto!important;min-width:180px!important}
+.rowActions{position:relative!important;z-index:3!important;display:flex!important;gap:7px!important;align-items:center!important}
+.rowActions button{position:relative!important;z-index:4!important;pointer-events:auto!important}
+@media(max-width:800px){.modalShade{padding:12px!important}.userModal .formGrid,.userModal .permGrid{grid-template-columns:1fr!important}.userFormActions .primary{width:100%!important}.smallModal,.userModal{max-height:calc(100vh - 24px)!important}}

@@ -19,3 +19,8 @@
 - إضافة account_id في wrangler.toml لضمان النشر على حساب Cloudflare الصحيح.
 
 V15.0 — Desktop Command Navigation + User/Permission Reliability + Test Data Cleanup
+
+## V15.1
+- Fixed non-responsive region/user/permission action buttons by restoring modal overlay positioning and pointer interaction.
+- Fixed user permission editor and region add/edit dialogs visibility.
+- Added robust modal sizing for desktop and mobile.
