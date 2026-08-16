@@ -1,4 +1,4 @@
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, SCHEMA_VERSION=15;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=16;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
@@ -29,9 +29,18 @@ function nowIso(){return new Date().toISOString().replace("T"," ").replace(/\.\d
 async function user(req,env){
  const t=cookie(req); if(!t)return null;
  const u=await env.DB.prepare(`SELECT u.*,s.login_at,s.last_seen_at,s.token FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>? AND u.active=1`).bind(t,Math.floor(Date.now()/1000)).first();
- if(u){
-   const now=Date.now(), last=seenSessions.get(t)||0;
-   if(now-last>60000){ seenSessions.set(t,now); await env.DB.prepare("UPDATE sessions SET last_seen_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run(); }
+ if(!u)return null;
+ const last=parseTs(u.last_seen_at);
+ if(last && Date.now()-last > IDLE_TIMEOUT_SECONDS*1000){
+   await env.DB.prepare("UPDATE sessions SET logout_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run();
+   await env.DB.prepare("DELETE FROM sessions WHERE token=?").bind(t).run();
+   seenSessions.delete(t);
+   return null;
+ }
+ const now=Date.now(), seen=seenSessions.get(t)||0;
+ if(now-seen>30000){
+   seenSessions.set(t,now);
+   await env.DB.prepare("UPDATE sessions SET last_seen_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run();
  }
  return u;
 }
@@ -85,7 +94,7 @@ function parseTs(x){if(!x)return null;const s=String(x).trim().replace(" ","T");
 function durationSeconds(r){const start=parseTs(r?.created_at);if(!start)return 0;let end=parseTs(r?.timer_end_at);if(!end&&r?.status!=="stopped")end=Date.now();if(!end)end=parseTs(r?.timer_paused_at)||Date.now();const paused=Number(r?.paused_seconds||0)*1000;return Math.max(0,Math.floor((end-start-paused)/1000))}
 function durationLabel(sec){sec=Math.max(0,Number(sec)||0);let d=Math.floor(sec/86400);sec%=86400;let h=Math.floor(sec/3600);sec%=3600;let m=Math.floor(sec/60);let s=sec%60;return `${d?d+" يوم ":""}${h?h+" ساعة ":""}${m?m+" دقيقة ":""}${s+" ثانية"}`.trim()||"0 ثانية"}
 function responseDuration(r){if(!r?.region_responded_at)return null;return Math.max(0,Math.floor((parseTs(r.region_responded_at)-parseTs(r.created_at))/1000))}
-function withMeta(r){const start=r?.created_at||null;const age=durationSeconds(r);return {...r,status_label:labels[r.status]||r.status,timer_start_at:start,sla_hours:SLA_HOURS,age_seconds:age,duration_label:durationLabel(age),overdue:!CLOSED.includes(r.status)&&!!start&&age>=SLA_HOURS*3600}}
+function withMeta(r){const start=r?.created_at||null;const age=durationSeconds(r);const timerEnd=r?.timer_end_at||(r?.status==="stopped"?r?.stopped_at:null);return {...r,status_label:labels[r.status]||r.status,timer_start_at:start,timer_end_at:timerEnd,sla_hours:SLA_HOURS,age_seconds:age,duration_label:durationLabel(age),overdue:!CLOSED.includes(r.status)&&r?.status!=="stopped"&&!!start&&age>=SLA_HOURS*3600}}
 async function currentDelegation(env,sourceId){
  const now=nowIso();
  return await env.DB.prepare(`SELECT d.*,u.name target_name FROM delegations_v2 d JOIN users u ON u.id=d.target_user_id WHERE d.source_user_id=? AND d.active=1 AND u.active=1 AND (d.starts_at IS NULL OR d.starts_at<=?) AND (d.ends_at IS NULL OR d.ends_at>=?) ORDER BY d.id DESC LIMIT 1`).bind(sourceId,now,now).first();
@@ -262,7 +271,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
     if(!allow(u,"stop_records"))return json({error:"ليس لديك صلاحية إيقاف المعاملة"},403);
     if(CLOSED.includes(r.status)||r.status==="stopped")return json({error:"المعاملة ليست نشطة"},400);
     const pausedAt=nowIso();
-    await env.DB.prepare("UPDATE records SET status='stopped',requester_note=?,timer_paused_at=?,stopped_at=?,stopped_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.note||"",pausedAt,pausedAt,u.id,id).run();
+    await env.DB.prepare("UPDATE records SET status='stopped',requester_note=?,timer_paused_at=?,timer_end_at=?,stopped_at=?,stopped_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.note||"",pausedAt,pausedAt,pausedAt,u.id,id).run();
     await stageTransition(env,r,"stopped",u.id);
     await log(env,id,u.id,"إيقاف المعاملة",b.note||"");
     return json({ok:true});

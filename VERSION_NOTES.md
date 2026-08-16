@@ -1,26 +1,8 @@
-# V14.1 — Enterprise Performance & Reliability
+# V16.0 — Enterprise UX Re-engineering
 
-- تحسين زمن التحميل بإزالة تحميل SheetJS من كل صفحة وجعله تحميلًا كسولًا عند الحاجة للرفع فقط.
-- إزالة الاعتماد على Google Fonts الخارجي في الواجهة لتسريع أول تحميل.
-- توحيد شاشة رفع المعاملات: إدخال فردي ورفع جماعي في شاشة واحدة.
-- إصلاح إدارة المستخدمين والصلاحيات باستخدام محددات DOM صريحة بدل الاعتماد على متغيرات IDs العامة في المتصفح.
-- السماح بحفظ مجموعة صلاحيات فارغة عمدًا بدل إعادة صلاحيات الدور تلقائيًا.
-- الحفاظ على حالة المستخدم المعطل عند تعديل بياناته.
-- إضافة تحديد/إلغاء تحديد صلاحيات المجموعة بسرعة.
-- جعل إدارة الأقاليم تدعم العرض والتفعيل/التعطيل.
-- تحسين توزيع المعاملات على مسؤولي الإقليم بناءً على الحمل النشط الأقل.
-- إصلاح التفويض بحيث يحدّث المعاملات النشطة الحالية ويُطبق على المعاملات المستقبلية، مع مزامنة التفويضات المنتهية.
-- إصلاح إلغاء التفويض حتى لا يؤثر على معاملات مفوضيات أخرى.
-- تحسين تحليلات الأداء باستخدام D1 batch لتقليل زمن الاستجابة.
-- إضافة cache قصير للبيانات الثابتة نسبيًا مثل الأقاليم ولوحة القيادة.
-- تحسين المسار الأفقي للمعاملة داخل التفاصيل.
-- التصدير أصبح CSV متوافقًا مباشرة مع Excel لتقليل الاعتماد على مكتبة كبيرة في كل صفحة.
-- تحسين تنزيل نموذج Excel بإرسال Content-Disposition صريح.
-- إضافة account_id في wrangler.toml لضمان النشر على حساب Cloudflare الصحيح.
-
-V15.0 — Desktop Command Navigation + User/Permission Reliability + Test Data Cleanup
-
-## V15.1
-- Fixed non-responsive region/user/permission action buttons by restoring modal overlay positioning and pointer interaction.
-- Fixed user permission editor and region add/edit dialogs visibility.
-- Added robust modal sizing for desktop and mobile.
+- No confirmation popups for normal workflow actions; only destructive test-data cleanup keeps explicit confirmation.
+- 30-minute inactivity auto logout enforced server-side and monitored client-side.
+- Transaction timer freezes correctly when a transaction is stopped or closed.
+- Timer presentation uses compact professional clock format (HH:MM:SS / days + clock).
+- Transaction detail workspace is prepared for full visual re-engineering with stage timeline, responsibility timing, notes, files, and actions.
+- Existing D1 binding/database configuration is preserved.

@@ -51,12 +51,8 @@ const duration = sec => {
   const d=Math.floor(sec/86400); sec%=86400;
   const h=Math.floor(sec/3600); sec%=3600;
   const m=Math.floor(sec/60); const s=sec%60;
-  const out=[];
-  if(d)out.push(`${d} يوم`);
-  if(h)out.push(`${h} ساعة`);
-  if(m)out.push(`${m} دقيقة`);
-  if(!out.length || s)out.push(`${s} ثانية`);
-  return out.join(" ");
+  const clock=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return d ? `${d} يوم · ${clock}` : clock;
 };
 const liveDuration = (start, paused, end) => {
   if(!start) return "—";
@@ -69,7 +65,8 @@ async function api(url, opts={}) {
   const isGet=!opts.method || String(opts.method).toUpperCase()==="GET";
   const cacheable=isGet && url==="/api/regions";
   if(cacheable){const c=apiCache.get(url);if(c&&Date.now()-c.at<30000)return c.data;}
-  const r=await fetch(url,{...opts,headers:{"content-type":"application/json",...(opts.headers||{})}});
+  const requestUrl=opts.cacheBust?`${url}${url.includes("?")?"&":"?"}_=${opts.cacheBust}`:url;
+  const r=await fetch(requestUrl,{...opts,headers:{"content-type":"application/json",...(opts.headers||{})}});
   let data={}; try{data=await r.json()}catch{}
   if(!r.ok) throw Error(data.error||"تعذر تنفيذ العملية");
   if(cacheable){apiCache.set(url,{at:Date.now(),data});regionsCache=data;}
@@ -131,7 +128,7 @@ function layout(u){
   if(u.role==="region") refreshBadge();
 }
 function login(){
-  clearInterval(timerInterval);
+  clearInterval(timerInterval);clearInterval(idleGuard);ME=null;
   app.innerHTML=`<main class="loginPage"><div class="loginGlow"></div><section class="loginPanel"><div class="loginBrand"><div>CC</div><span>CONTROL CENTER</span></div><h1>متابعة العقود</h1><p>منصة داخلية لإدارة دورة المعاملة، المسؤوليات، الزمن، والتقارير.</p><form id="loginForm"><label>اسم المستخدم<input id="username" required autocomplete="username" placeholder="أدخل اسم المستخدم"></label><label>كلمة المرور<input id="password" type="password" required autocomplete="current-password" placeholder="••••••••"></label><button class="primary wide">الدخول إلى مركز التحكم</button><small id="loginError"></small></form><footer>نظام داخلي · Contract Control</footer></section></main>`;
   document.querySelector("#loginForm").onsubmit=async e=>{
     e.preventDefault(); loginError.textContent="";
@@ -139,7 +136,9 @@ function login(){
     catch(x){loginError.textContent=x.message;}
   };
 }
-async function boot(){try{const d=await api("/api/me");ME=d.user;if(ME)layout(ME);else login();}catch{login();}}
+async function boot(){try{const d=await api("/api/me");ME=d.user;if(ME){layout(ME);startIdleGuard();}else login();}catch{login();}}
+let idleGuard=null;
+function startIdleGuard(){clearInterval(idleGuard);idleGuard=setInterval(async()=>{if(!ME)return;try{const d=await api("/api/me",{cacheBust:Date.now()});if(!d.user){clearInterval(idleGuard);ME=null;toast("انتهت الجلسة بسبب عدم النشاط لمدة 30 دقيقة","err");login();}}catch(e){if(String(e.message).includes("غير مصرح")){clearInterval(idleGuard);ME=null;login();}}},60000)}
 async function dash(){
   VIEW="home";navActive("home");title("الرئيسية",ME?.role==="region"?"ملخص أدائك خلال آخر 7 أيام":"مركز القيادة والمتابعة");
   const view=document.querySelector("#view"); view.innerHTML=`<div class="loading">جاري تجهيز مركز القيادة…</div>`;
@@ -211,7 +210,7 @@ async function quickRegion(id){
 async function quickRegionSubmit(id,kind){const note=document.querySelector("#quickRegionNote")?.value||"";if(kind==="documented"){try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickShade")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}}}
 function quickRegionWithdraw(id){const a=document.querySelector("#quickWithdrawArea");a.innerHTML=`<div class="inlineGrid"><label>تاريخ نهاية الدوام<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع/الإجراء<input id="qTxn"></label></div><button class="danger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل الانسحاب</button>`}
 async function quickRegionWithdrawSubmit(id){const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";if(!end||!txn)return toast("أكمل بيانات الانسحاب","err");try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickShade")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}}
-async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";if(!confirm(action==="final_withdrawn"?"اعتماد انسحاب الموظف؟":"اعتماد التوثيق وإغلاق المعاملة؟"))return;try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد سريع من قائمة المعاملات"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
+async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد سريع من قائمة المعاملات"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
   document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet"><button class="modalClose" onclick="closeRecord()">×</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
