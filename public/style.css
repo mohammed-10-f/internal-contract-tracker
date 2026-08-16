@@ -258,3 +258,30 @@ select option{font-family:Tahoma,"Segoe UI",Arial,sans-serif;padding:10px;backgr
 }
 @media(min-width:901px){.mobileBar{display:none!important}}
 .permSuggestion{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin:4px 0 10px;background:linear-gradient(135deg,#edf6ff,#f7fbff);border:1px solid #cfe1f5;border-radius:14px}.permSuggestion b{display:block;font-size:10px;color:#245783}.permSuggestion small{display:block;color:#7b8ca0;font-size:7px;margin-top:3px}.permSuggestion button{white-space:nowrap}
+
+/* ===== V18.0 — Premium Select / Action / Mobile UX ===== */
+.appSelect{position:relative;width:100%;min-width:0}
+.appSelect>select{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;pointer-events:none!important;z-index:-1!important}
+.appSelectButton{width:100%;height:44px;border:1px solid #d7e1ec;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbfe);color:#1b3048;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 13px;cursor:pointer;font:700 10px Tahoma,"Segoe UI",Arial,sans-serif;box-shadow:0 4px 14px rgba(20,50,85,.035);transition:.18s ease}
+.appSelectButton:hover{border-color:#a9c7e5;box-shadow:0 7px 20px rgba(35,104,179,.08);transform:translateY(-1px)}
+.appSelectButton:focus-visible{outline:none;border-color:#4d94d4;box-shadow:0 0 0 4px rgba(77,148,212,.14)}
+.appSelectButton i{font-style:normal;font-size:16px;color:#69809a;line-height:1;transform:translateY(-2px)}
+.appSelectMenu{position:absolute;top:calc(100% + 7px);right:0;left:0;z-index:500;display:none;padding:6px;background:rgba(255,255,255,.98);border:1px solid #d9e3ee;border-radius:14px;box-shadow:0 22px 55px rgba(15,39,67,.17);backdrop-filter:blur(14px);max-height:280px;overflow:auto}
+.appSelectMenu.open{display:block;animation:selectIn .13s ease-out}
+.appSelectMenu button{width:100%;border:0;background:transparent;color:#30455d;text-align:right;border-radius:9px;min-height:38px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font:600 9px Tahoma,"Segoe UI",Arial,sans-serif;cursor:pointer}
+.appSelectMenu button:hover{background:#f1f7fd;color:#175b9c}
+.appSelectMenu button.selected{background:#eaf4ff;color:#155d9f;font-weight:900}
+.appSelectMenu button b{color:#2675ba;font-size:11px}
+@keyframes selectIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.tempPasswordBanner{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px;padding:13px 15px;border:1px solid #cfe2f5;border-radius:15px;background:linear-gradient(135deg,#f2f8ff,#fbfdff);box-shadow:0 8px 24px rgba(24,74,120,.06)}
+.tempPasswordBanner div{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.tempPasswordBanner b{font-size:10px;color:#21486c}.tempPasswordBanner span{direction:ltr;font:900 12px ui-monospace,Consolas,monospace;background:#fff;border:1px dashed #b9cee2;border-radius:8px;padding:7px 10px;color:#12395d}.tempPasswordBanner small{color:#7d8da0;font-size:8px}
+.quickActionStrip{grid-template-columns:minmax(260px,1.4fr) minmax(190px,.8fr) auto!important}
+.qaActions{justify-content:flex-end!important}.qaActions .qaPrimary{background:#187a61!important}.qaActions .qaDanger{background:#fff1f1!important;color:#b23c48!important}
+.recordNoBlock{flex-wrap:wrap}.recordNoBlock .recordNo{font-weight:900;color:#173a5d;background:#edf5fc;padding:5px 8px;border-radius:8px}.actionTxn,.interruptionTxn{font-weight:800}
+.insightGrid .insight strong{font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+@media(max-width:900px){
+ .topbar{display:flex!important}.topBrand{display:flex!important}.topNav{display:none!important}.topActions{margin-right:auto}.mobileBar{display:flex!important}
+ .quickActionStrip{grid-template-columns:1fr!important}.qaActions{display:grid!important;grid-template-columns:1fr 1fr!important}.qaActions button{width:100%!important}
+ .tempPasswordBanner{align-items:flex-start;flex-wrap:wrap}.tempPasswordBanner div{width:100%}
+ .appSelectMenu{max-height:240px}
+}

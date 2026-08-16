@@ -1,8 +1,10 @@
-# V16.0 — Enterprise UX Re-engineering
+# V18.0 — Enterprise UX Re-engineering
 
-- No confirmation popups for normal workflow actions; only destructive test-data cleanup keeps explicit confirmation.
-- 30-minute inactivity auto logout enforced server-side and monitored client-side.
-- Transaction timer freezes correctly when a transaction is stopped or closed.
-- Timer presentation uses compact professional clock format (HH:MM:SS / days + clock).
-- Transaction detail workspace is prepared for full visual re-engineering with stage timeline, responsibility timing, notes, files, and actions.
-- Existing D1 binding/database configuration is preserved.
+- Redesigned navigation and responsive behavior.
+- Single mobile navigation; desktop uses top navigation.
+- Custom modern select component across the application.
+- Compact performance metrics and clearer transaction action hierarchy.
+- Region quick actions: تم التوثيق / منسحب / التفاصيل.
+- Admin temporary password reset for non-admin users.
+- No confirmation dialogs for normal actions; test-data cleanup remains protected.
+- Preserves existing D1 database binding.

@@ -3,13 +3,13 @@ const app = document.querySelector("#app");
 
 const roleLabel = {admin:"مدير النظام", requester:"HR", region:"مسؤول إقليم", viewer:"مشاهد"};
 const statusLabel = {
-  waiting_region:"بانتظار إفادة الإقليم",
+  waiting_region:"بانتظار الإفادة",
   returned:"مرتجع للتصحيح",
-  region_documented:"تمت الإفادة — بانتظار اعتماد HR",
-  region_withdrawn:"إفادة انسحاب — بانتظار اعتماد HR",
-  final_documented:"مكتملة",
-  final_withdrawn:"منتهية",
-  cancelled:"منتهية",
+  region_documented:"بانتظار الاعتماد",
+  region_withdrawn:"بانتظار اعتماد الانسحاب",
+  final_documented:"تم التوثيق",
+  final_withdrawn:"منسحب الموظف",
+  cancelled:"ملغاة",
   stopped:"موقوفة"
 };
 const permLabel = {
@@ -101,6 +101,32 @@ function navIcon(name){
  const m={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5.2v-6h-5.6v6H4a1 1 0 0 1-1-1z"/></svg>',records:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',upload:'<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',stats:'<svg viewBox="0 0 24 24"><path d="M5 19V10M12 19V5M19 19v-8"/></svg>',archive:'<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM3 4h18v3H3zM9 11h6"/></svg>',users:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 5.5a3 3 0 0 1 0 5.8M16 14a5 5 0 0 1 4.5 6"/></svg>',regions:'<svg viewBox="0 0 24 24"><path d="M5 4h6v6H5zM13 14h6v6h-6zM13 4h6v6h-6zM5 14h6v6H5z"/></svg>',audit:'<svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>'};return m[name]||m.records;}
 function stat(label,value,type="blue",sub=""){return `<div class="statCard"><span class="statIcon ${type}">${icon(type)}</span><div><small>${esc(label)}</small><strong>${value}</strong>${sub?`<em>${esc(sub)}</em>`:""}</div></div>`;}
 function navActive(key){document.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("active",x.dataset.nav===key));}
+function enhanceSelects(root=document){
+  const scope=root.querySelectorAll?root:document;
+  scope.querySelectorAll('select:not([data-enhanced="1"])').forEach(sel=>{
+    sel.dataset.enhanced='1';
+    const wrap=document.createElement('div'); wrap.className='appSelect';
+    sel.parentNode.insertBefore(wrap,sel); wrap.appendChild(sel);
+    const btn=document.createElement('button'); btn.type='button'; btn.className='appSelectButton';
+    const menu=document.createElement('div'); menu.className='appSelectMenu';
+    const rebuild=()=>{
+      const opts=[...sel.options];
+      btn.innerHTML=`<span>${esc(sel.selectedOptions[0]?.text||'اختر')}</span><i>⌄</i>`;
+      menu.innerHTML=opts.map((o,i)=>`<button type="button" class="${o.selected?'selected':''}" data-value="${esc(o.value)}"><span>${esc(o.text)}</span>${o.selected?'<b>✓</b>':''}</button>`).join('');
+      menu.querySelectorAll('button').forEach(item=>item.addEventListener('click',()=>{
+        sel.value=item.dataset.value; sel.dispatchEvent(new Event('change',{bubbles:true})); rebuild(); menu.classList.remove('open'); btn.setAttribute('aria-expanded','false');
+      }));
+    };
+    btn.setAttribute('aria-haspopup','listbox'); btn.setAttribute('aria-expanded','false');
+    btn.addEventListener('click',e=>{e.stopPropagation();document.querySelectorAll('.appSelectMenu.open').forEach(x=>x!==menu&&x.classList.remove('open'));menu.classList.toggle('open');btn.setAttribute('aria-expanded',menu.classList.contains('open'));});
+    sel.addEventListener('change',rebuild);
+    wrap.append(btn,menu); rebuild();
+    const observer=new MutationObserver(rebuild); observer.observe(sel,{childList:true,subtree:true,attributes:true,attributeFilter:['selected']});
+  });
+}
+document.addEventListener('click',()=>document.querySelectorAll('.appSelectMenu.open').forEach(x=>x.classList.remove('open')));
+const selectObserver=new MutationObserver(m=>{if(m.some(x=>x.addedNodes.length)) enhanceSelects(document)});
+selectObserver.observe(document.body,{childList:true,subtree:true});
 function layout(u){
   const admin=u.role==="admin";
   const navItems=[];
@@ -122,7 +148,7 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
-      <footer class="appFooter"><span>Contract Control</span><b>V17.1</b><span>نظام متابعة العقود</span></footer>
+      <footer class="appFooter"><span>Contract Control</span><b>V18.0</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
@@ -209,13 +235,13 @@ async function loadMoreRecords(btn){
  try{const qs=new URLSearchParams({q,status,region,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
 function recordCard(r){
   const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  return `<article class="recordCard" onclick="openRecord(${r.id})"><div class="recordAccent ${r.status}"></div><div class="recordHead"><div><div class="recordNoBlock"><span class="recordNo">#${r.id}</span>${r.transaction_no?`<span class="actionTxn">معاملة الإجراء: ${esc(r.transaction_no)}</span>`:""}${r.interruption_transaction_no?`<span class="interruptionTxn">الانقطاع: ${esc(r.interruption_transaction_no)}</span>`:""}</div><h3>${esc(r.employee_name)}</h3><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div><div class="recordMeta"><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span><span>رفع <b>${fmtDate(r.created_at)}</b></span><span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span></div><div class="recordFooter"><div><small>${active?"مدة المعاملة":"مدة المعاملة النهائية"}</small><strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></div><div class="cardActions">${(ME?.role==="region"&&["waiting_region","returned"].includes(r.status)&&can("respond_region"))?`<button class="quickBtn" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`:""}${(can("approve")&&["region_documented","region_withdrawn"].includes(r.status))?`<button class="quickBtn approve" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}<button class="openBtn" onclick="event.stopPropagation();openRecord(${r.id})">التفاصيل ↗</button></div></div></article>`;
+  return `<article class="recordCard" onclick="openRecord(${r.id})"><div class="recordAccent ${r.status}"></div><div class="recordHead"><div><div class="recordNoBlock"><span class="recordNo">#${r.id}</span>${r.transaction_no?`<span class="actionTxn">معاملة الإجراء: ${esc(r.transaction_no)}</span>`:""}${r.interruption_transaction_no?`<span class="interruptionTxn">الانقطاع: ${esc(r.interruption_transaction_no)}</span>`:""}</div><h3>${esc(r.employee_name)}</h3><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div><div class="recordMeta"><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span><span>رفع <b>${fmtDate(r.created_at)}</b></span><span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span></div><div class="recordFooter"><div><small>${active?"مدة المعاملة":"مدة المعاملة النهائية"}</small><strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></div><div class="cardActions">${(ME?.role==="region"&&["waiting_region","returned"].includes(r.status)&&can("respond_region"))?`<button class="quickBtn qaPrimary" onclick="event.stopPropagation();quickRegionSubmit(${r.id},'documented')">تم التوثيق</button><button class="quickBtn qaDanger" onclick="event.stopPropagation();quickRegion(${r.id})">منسحب</button>`:""}${(can("approve")&&["region_documented","region_withdrawn"].includes(r.status))?`<button class="quickBtn approve" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}<button class="openBtn" onclick="event.stopPropagation();openRecord(${r.id})">التفاصيل</button></div></div></article>`;
 }
 async function quickRegion(id){
   document.querySelector(".quickActionStrip")?.remove();
   const d=await api(`/api/records/${id}`),r=d.record;
   const cards=document.querySelector("#recordCards"); if(!cards)return;
-  cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}"><div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إجراء المعاملة #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div><div class="qaField"><small>رقم معاملة التعيين</small><b>${esc(r.transaction_no||"غير مسجل")}</b></div><div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تسجيل الإفادة</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">إفادة انسحاب</button></div><div id="quickRegionArea" style="grid-column:1/-1"></div></section>`);
+  cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}"><div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إجراء سريع · #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div><div class="qaField"><small>رقم معاملة التعيين</small><b>${esc(r.transaction_no||"غير مسجل")}</b></div><div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تم التوثيق</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">منسحب</button></div><div id="quickRegionArea" style="grid-column:1/-1"></div></section>`);
   document.querySelector(".quickActionStrip")?.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 async function quickRegionSubmit(id,kind){const note=document.querySelector("#quickRegionNote")?.value||"";if(kind==="documented"){try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}}}
@@ -352,7 +378,7 @@ async function users(){
   try{
     const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
-    v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">ACCESS CONTROL</span><h2>الحسابات</h2><p>إدارة الدور، الإقليم، والصلاحيات بدون مغادرة الشاشة.</p></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الإقليم</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span>${esc(x.region||"—")}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
+    v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">ACCESS CONTROL</span><h2>الحسابات</h2><p>إدارة الدور، الإقليم، والصلاحيات بدون مغادرة الشاشة.</p></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الإقليم</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span>${esc(x.region||"—")}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
     <section class="section"><div class="sectionHead"><div><span class="eyebrow">DELEGATION CENTER</span><h2>التفويض</h2><p>ينقل معاملات المصدر النشطة، ويُطبق تلقائياً على المعاملات المستقبلية.</p></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active&&["requester","admin"].includes(x.role)).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
@@ -388,6 +414,13 @@ async function clearTestData(){
   if(ok!=="RESET")return;
   try{await api("/api/admin/clear-test-data",{method:"POST",body:JSON.stringify({confirm:"RESET"})});toast("تم تنظيف بيانات الاختبار بنجاح");users();}catch(e){toast(e.message,"err");}
 }
+async function resetUserPassword(id){
+  try{
+    const d=await api(`/api/users/${id}/reset-password`,{method:'POST'});
+    const box=document.querySelector('.tempPasswordBanner'); box?.remove();
+    document.querySelector('#view')?.insertAdjacentHTML('afterbegin',`<div class="tempPasswordBanner"><div><b>كلمة المرور المؤقتة</b><span>${esc(d.temporary_password)}</span><small>تظهر مرة واحدة — انسخها وسلّمها للمستخدم.</small></div><button class="soft" onclick="navigator.clipboard?.writeText(${JSON.stringify(d.temporary_password)});toast('تم نسخ كلمة المرور')">نسخ</button><button class="ghost" onclick="this.parentElement.remove()">إخفاء</button></div>`);
+  }catch(e){toast(e.message,'err')}
+}
 async function toggleUser(id){try{await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify({action:"toggle"})});users();}catch(e){toast(e.message,"err");}}
 async function createDelegation(){
   const source=Number(document.querySelector("#delSource").value),target=Number(document.querySelector("#delTarget").value);if(source===target)return toast("المفوِّض والمفوَّض إليه يجب أن يكونا مختلفين","err");
@@ -415,5 +448,5 @@ async function loadAudit(){
 async function exportAudit(){try{const d=await api("/api/audit/export");downloadRows(d.rows||[],"سجل_النشاط");}catch(e){toast(e.message,"err");}}
 async function refreshBadge(){if(ME?.role!=="region")return;try{const d=await api("/api/records?status=required");const b=document.querySelector("#reqBadge");if(b)b.textContent=d.records?.length||0;}catch{}}
 async function logout(){try{await api("/api/logout")}finally{ME=null;login();}}
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickRegion=quickRegion;window.quickRegionSubmit=quickRegionSubmit;window.quickRegionWithdraw=quickRegionWithdraw;window.quickRegionWithdrawSubmit=quickRegionWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.regions=regions;window.regionForm=regionForm;window.saveRegion=saveRegion;window.toggleRegion=toggleRegion;window.archiveRegion=archiveRegion;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickRegion=quickRegion;window.quickRegionSubmit=quickRegionSubmit;window.quickRegionWithdraw=quickRegionWithdraw;window.quickRegionWithdrawSubmit=quickRegionWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.regions=regions;window.regionForm=regionForm;window.saveRegion=saveRegion;window.toggleRegion=toggleRegion;window.archiveRegion=archiveRegion;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
 boot();
