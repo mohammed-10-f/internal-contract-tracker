@@ -1,4 +1,25 @@
 
+/* V18.7 — region action semantics */
+function isRegionRequiredAction(record){
+  const s=String(record?.status||'').trim().toLowerCase();
+  return /بانتظار.*إفادة|مطلوب.*إجراء|returned|needs.?action|waiting.*region|correction/.test(s)
+         && !/منسحب|withdraw|cancel|ملغ/.test(s);
+}
+function isRegionWithdrawn(record){
+  const s=String(record?.status||'').trim().toLowerCase();
+  return /منسحب|withdraw/.test(s);
+}
+function filterRegionRequiredActions(records){
+  return (records||[]).filter(isRegionRequiredAction);
+}
+function openRegionExternalAction(record, action){
+  // External action must execute directly; withdrawn is not routed through
+  // the required-actions list and does not open another duplicate card.
+  if(action==='withdrawn') return window.location.assign(`/records/${record.id}?action=withdrawn`);
+  if(action==='respond') return window.location.assign(`/records/${record.id}?action=respond`);
+  if(action==='approve') return window.location.assign(`/records/${record.id}?action=approve`);
+}
+
 /* V18.5 — region manager workspace */
 function regionManagerBucket(status){
   const s=String(status||'').trim().toLowerCase();

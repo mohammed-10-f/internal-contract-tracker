@@ -374,3 +374,32 @@ input[type="date"]{cursor:pointer;min-height:44px}
 .regionWorkspaceIntro{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:14px}.regionWorkspaceIntro strong{font-size:17px;color:#101828}.regionWorkspaceIntro small{width:100%;color:#667085;font-size:12px}
 .regionTabs{margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.regionTabs button{display:flex;align-items:center;justify-content:space-between;min-height:54px;border:1px solid #e4e7ec;background:#fff;border-radius:14px;padding:0 15px;color:#344054;font-weight:800;cursor:pointer;transition:.18s ease}.regionTabs button:hover{border-color:#b8c0cc;transform:translateY(-1px)}.regionTabs button.active{background:#101828;color:#fff;border-color:#101828;box-shadow:0 7px 18px rgba(16,24,40,.12)}.regionTabs button b{min-width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:#eef2f6;color:#101828}.regionTabs button.active b{background:rgba(255,255,255,.16);color:#fff}
 @media(max-width:760px){.regionTabs{grid-template-columns:1fr}.regionWorkspaceIntro small{line-height:1.6}}
+
+/* V18.7 — mobile field system */
+@media (max-width: 760px){
+  .form-grid,.fields-grid,.record-form-grid,.filter-grid{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:12px !important;
+    width:100% !important;
+  }
+  .form-grid>*,.fields-grid>* ,.record-form-grid>* ,.filter-grid>*{
+    width:100% !important;
+    min-width:0 !important;
+    grid-column:1 / -1 !important;
+  }
+  input,select,textarea,button{
+    box-sizing:border-box !important;
+    max-width:100% !important;
+  }
+  input,select{
+    min-height:44px;
+  }
+  textarea{
+    min-height:96px;
+  }
+  .region-case-card{
+    width:100%;
+    box-sizing:border-box;
+  }
+}
