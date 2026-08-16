@@ -310,3 +310,24 @@ select option{font-family:Tahoma,"Segoe UI",Arial,sans-serif;padding:10px;backgr
 
 /* V18.2 final polish */
 .analysisMeta{color:#7c899c;font-size:12px}.qualityRows{display:grid;grid-template-columns:1fr 1fr;gap:10px}.qualityRows>div{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#fbfcfe}.qualityRows span{color:#66758a;font-size:12px}.qualityRows b{font-size:18px}.analyticsFilters label{cursor:pointer}.analyticsFilters input[type=date],.auditFilters input[type=date]{cursor:pointer;min-height:44px}input[type=date],input[type=datetime-local]{cursor:pointer}@media(max-width:760px){.qualityRows{grid-template-columns:1fr}}
+
+/* V18.3 — focused fixes */
+.record-header-v18,.detail-header-v18{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:16px;
+  align-items:center;
+  padding:20px 22px;
+  border-radius:18px;
+}
+.record-header-v18 .actions,.detail-header-v18 .actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+input[type="date"]{cursor:pointer;min-height:44px}
+@media(max-width:760px){
+  .record-header-v18,.detail-header-v18{grid-template-columns:1fr;padding:16px}
+  .record-header-v18 .actions,.detail-header-v18 .actions{justify-content:stretch}
+}

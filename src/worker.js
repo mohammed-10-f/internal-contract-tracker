@@ -421,3 +421,20 @@ if(u.role==="requester"){esql+=" AND r.requester_id=?";ea.push(u.id)}if(region){
  if(p==="/template.xlsx"||p==="/contract_upload_template.xlsx"){const asset=await env.ASSETS.fetch(new Request(new URL("/contract_upload_template.xlsx",url)));if(!asset.ok)return asset;const h=new Headers(asset.headers);h.set("content-disposition",'attachment; filename="contract_upload_template.xlsx"');h.set("content-type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");return new Response(asset.body,{status:asset.status,headers:h});}
  if(!p.startsWith("/api/"))return env.ASSETS.fetch(req);return json({error:"غير موجود"},404);
 }}
+
+
+function wireDatePickers(root=document){
+  root.querySelectorAll('input[type="date"]').forEach(el=>{
+    if(el.dataset.pickerWired) return;
+    el.dataset.pickerWired='1';
+    el.addEventListener('click',()=>{
+      try{ if(typeof el.showPicker==='function') el.showPicker(); }catch(_){}
+    });
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){
+        try{ if(typeof el.showPicker==='function') el.showPicker(); }catch(_){}
+      }
+    });
+  });
+}
+
