@@ -231,14 +231,31 @@ function title(a,b=""){document.querySelector("#pageTitle").textContent=a;docume
 function errorState(msg){return `<div class="errorState"><div>!</div><h3>تعذر تحميل الشاشة</h3><p>${esc(msg)}</p><button class="primary" onclick="dash()">إعادة المحاولة</button></div>`;}
 function emptyState(msg){return `<div class="emptyState"><span>⌁</span><b>${esc(msg)}</b></div>`;}
 async function list(mode=""){
-  VIEW=mode||"records";navActive(mode==="closed"?"closed":"records");
-  title(mode==="closed"?"الأرشيف":mode==="required"?"المطلوب مني":"المعاملات",mode==="required"?"المعاملات التي تحتاج إجراءك الآن":"ابحث، صفِّ، وافتح أي معاملة من بطاقة موحدة");
+  if(ME.role==="region" && !mode) mode="required";
+  VIEW=mode||"records"; navActive(mode==="closed"?"closed":"records");
+  const pageTitle=ME.role==="region"?(mode==="closed"?"منتهية":mode==="approval"?"بانتظار الاعتماد":"مطلوب مني"):(mode==="closed"?"الأرشيف":mode==="required"?"المطلوب مني":"المعاملات");
+  const sub=ME.role==="region"?"":(mode==="required"?"المعاملات التي تحتاج إجراءك الآن":"");
+  title(pageTitle,sub);
   const v=document.querySelector("#view");
-  v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INBOX</span><h2>${mode==="required"?"مطلوب منك الآن":"كل المعاملات"}</h2></div>${can("export")?`<button class="soft" onclick="exportFromList()">تصدير النتائج</button>`:""}</div>
-${ME.role==="region"?`<div class="inboxTabs"><button class="${mode===""?"active":""}" onclick="list('')">الكل</button><button class="${mode==="required"?"active":""}" onclick="list('required')">مطلوب مني <b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')">بانتظار الاعتماد</button><button class="${mode==="closed"?"active":""}" onclick="list('closed')">المكتملة</button></div>`:""}<div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة"><select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select><select id="regionFilter"><option value="">كل الأقاليم</option></select><label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div></section>`;
-  document.querySelector("#statusFilter").value=mode||"";
-  try{const r=await api("/api/regions");document.querySelector("#regionFilter").innerHTML=`<option value="">كل الأقاليم</option>${(r.regions||[]).map(x=>`<option>${esc(x.name||x)}</option>`).join("")}`}catch{}
+  v.innerHTML=`<section class="section">
+    <div class="sectionHead"><div><span class="eyebrow">TRANSACTION INBOX</span><h2>${esc(pageTitle)}</h2></div>${can("export")?`<button class="soft" onclick="exportFromList()">تصدير النتائج</button>`:""}</div>
+    ${ME.role==="region"?`<div class="regionWorkspace"><div class="regionWorkspaceIntro"><span class="eyebrow">REGION WORKSPACE</span><strong>صندوق عمل الإقليم</strong><small>مطلوب منك · بانتظار الاعتماد · منتهية</small></div><div class="inboxTabs regionTabs"><button class="${mode==="required"?"active":""}" onclick="list('required')"><span>مطلوب مني</span><b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')"><span>بانتظار الاعتماد</span><b id="approvalBadge">0</b></button><button class="${mode==="closed"?"active":""}" onclick="list('closed')"><span>منتهية</span><b id="closedBadge">0</b></button></div></div>`:""}
+    <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة">${ME.role==="region"?"":`<select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select>`}<select id="regionFilter"><option value="">كل الأقاليم</option></select><label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div>
+  </section>`;
+  if(ME.role!=="region"){const sf=document.querySelector("#statusFilter");if(sf)sf.value=mode||"";}
+  try{const r=await api("/api/regions");const rf=document.querySelector("#regionFilter");if(rf)rf.innerHTML=`<option value="">كل الأقاليم</option>${(r.regions||[]).map(x=>`<option>${esc(x.name||x)}</option>`).join("")}`}catch{}
   await loadRecords();
+  if(ME.role==="region") refreshRegionWorkspaceCounts();
+}
+async function refreshRegionWorkspaceCounts(){
+  if(ME?.role!=="region")return;
+  try{
+    const [a,b,c]=await Promise.all([api("/api/records?status=required&limit=1"),api("/api/records?status=approval&limit=1"),api("/api/records?status=closed&limit=1")]);
+    const put=(id,v)=>{const e=document.querySelector(id);if(e)e.textContent=Number(v||0)};
+    put("#reqBadge",a.total_count??a.total??(a.records||[]).length);
+    put("#approvalBadge",b.total_count??b.total??(b.records||[]).length);
+    put("#closedBadge",c.total_count??c.total??(c.records||[]).length);
+  }catch(_){ }
 }
 async function loadRecords(){
   const q=document.querySelector("#q")?.value||"", status=document.querySelector("#statusFilter")?.value||"", region=document.querySelector("#regionFilter")?.value||"", from=document.querySelector("#fromFilter")?.value||"", to=document.querySelector("#toFilter")?.value||"";
@@ -248,7 +265,7 @@ async function loadRecords(){
   try{
     qs.set("limit","60");qs.set("offset","0");
     const d=await api("/api/records?"+qs);let rows=d.records||[];
-    if(VIEW==="closed") rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));
+    
     target.innerHTML=(rows.map(recordCard).join("")||emptyState("لا توجد معاملات مطابقة"))+(d.has_more?`<button class="soft loadMoreBtn" onclick="loadMoreRecords(this)">تحميل المزيد</button>`:"");
     startLiveTimers();refreshBadge();
   }catch(e){target.innerHTML=errorState(e.message);}

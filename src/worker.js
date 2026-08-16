@@ -112,7 +112,7 @@ async function ensureSchema(env){
  })().catch(e=>{schemaReady=null;throw e});
  return schemaReady;
 }
-function canSeeClosed(u){return allow(u,"view_closed")}
+function canSeeClosed(u){return u?.role==="region" || allow(u,"view_closed")}
 function parseTs(x){if(!x)return null;const s=String(x).trim().replace(" ","T");return new Date(/Z$/.test(s)?s:s+"Z").getTime()}
 function durationSeconds(r){const start=parseTs(r?.created_at);if(!start)return 0;let end=parseTs(r?.timer_end_at);if(!end&&r?.status!=="stopped")end=Date.now();if(!end)end=parseTs(r?.timer_paused_at)||Date.now();const paused=Number(r?.paused_seconds||0)*1000;return Math.max(0,Math.floor((end-start-paused)/1000))}
 function durationLabel(sec){sec=Math.max(0,Number(sec)||0);let d=Math.floor(sec/86400);sec%=86400;let h=Math.floor(sec/3600);sec%=3600;let m=Math.floor(sec/60);let s=sec%60;return `${d?d+" يوم ":""}${h?h+" ساعة ":""}${m?m+" دقيقة ":""}${s+" ثانية"}`.trim()||"0 ثانية"}
@@ -232,15 +232,15 @@ export default {async fetch(req,env){
  if(p==="/api/records"&&req.method==="GET"){
   await syncDelegations(env);
   const q=url.searchParams.get("q")||"",s=url.searchParams.get("status")||"",region=url.searchParams.get("region")||"",from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"",limit=Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||60))),offset=Math.max(0,Number(url.searchParams.get("offset")||0));let sql=`SELECT r.*,ru.name region_user_name,req.name requester_name,ou.name original_manager_name,du.name delegated_from_name FROM records r LEFT JOIN users ru ON ru.id=r.region_user_id LEFT JOIN users req ON req.id=r.requester_id LEFT JOIN users ou ON ou.id=r.original_region_user_id LEFT JOIN users du ON du.id=r.delegated_from_user_id WHERE 1=1`,a=[];
-  if(u.role==="region"){sql+=" AND r.region_user_id=?";a.push(u.id)}
+  if(u.role==="region"){sql+=" AND (r.region_user_id=? OR r.original_region_user_id=?)";a.push(u.id,u.id)}
   if(u.role==="requester"){sql+=" AND (r.requester_id=? OR r.delegated_to_user_id=?)";a.push(u.id,u.id)}
   if(region){sql+=" AND r.region=?";a.push(region)}
   if(from){sql+=" AND r.created_at>=?";a.push(from+" 00:00:00")}
   if(to){sql+=" AND r.created_at<=?";a.push(to+" 23:59:59")}
   if(!canSeeClosed(u))sql+=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled')";
   if(q){sql+=" AND (r.employee_no LIKE ? OR r.employee_name LIKE ? OR r.transaction_no LIKE ? OR r.interruption_transaction_no LIKE ?)";const z="%"+q+"%";a.push(z,z,z,z)}
-  if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='region'?"r.region_user_id=?":"r.requester_id=?"}`,a.push(u.id);else if(s==="from_me")sql+=` AND r.requester_id=?`,a.push(u.id);else if(s==="approval")sql+=" AND r.status IN ('region_documented','region_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled')";else if(s==="overdue"){}else if(s)sql+=" AND r.status=?",a.push(s);
-  sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset);const rows=await env.DB.prepare(sql).bind(...a).all();let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit})
+  if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='region'?"(r.region_user_id=? OR r.original_region_user_id=?)":"r.requester_id=?"}`,a.push(...(u.role==='region'?[u.id,u.id]:[u.id]));else if(s==="approval")sql+=" AND r.status IN ('region_documented','region_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled','stopped')";else if(s==="overdue"){}else if(s)sql+=" AND r.status=?",a.push(s);
+  const countSql=sql; const countArgs=a.slice(); sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset); const [countRow,rows]=await env.DB.batch([env.DB.prepare(`SELECT COUNT(*) c FROM (${countSql})`).bind(...countArgs),env.DB.prepare(sql).bind(...a)]); let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit,total_count:Number(countRow.results?.[0]?.c||0)})
  }
  if(p==="/api/managers"&&req.method==="GET"){if(!allow(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
  if(p==="/api/regions"&&req.method==="GET"){const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");const rows=await env.DB.prepare(`SELECT name,active,created_at FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name`).all();return json({regions:rows.results})}
