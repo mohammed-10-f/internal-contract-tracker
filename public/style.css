@@ -331,3 +331,27 @@ input[type="date"]{cursor:pointer;min-height:44px}
   .record-header-v18,.detail-header-v18{grid-template-columns:1fr;padding:16px}
   .record-header-v18 .actions,.detail-header-v18 .actions{justify-content:stretch}
 }
+
+/* V18.5 — region workspace */
+.region-workspace-tabs{
+  display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;
+}
+.region-workspace-tab{
+  border:1px solid var(--border,#e6e9ef);background:#fff;border-radius:12px;
+  padding:10px 14px;font-weight:700;cursor:pointer;
+}
+.region-workspace-tab.is-active{
+  background:#101828;color:#fff;border-color:#101828;
+}
+.region-case-card{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;
+  align-items:center;padding:16px;border:1px solid var(--border,#e6e9ef);
+  border-radius:16px;background:#fff;
+}
+.region-case-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.region-case-actions button{min-height:38px;border-radius:10px}
+@media(max-width:760px){
+  .region-case-card{grid-template-columns:1fr}
+  .region-case-actions{justify-content:stretch}
+  .region-case-actions button{flex:1}
+}

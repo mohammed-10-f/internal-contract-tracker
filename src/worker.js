@@ -1,3 +1,24 @@
+
+/* V18.5 — region manager workspace */
+function regionManagerBucket(status){
+  const s=String(status||'').trim().toLowerCase();
+  if(/بانتظار الاعتماد|waiting.*approv|pending.*approv|approval/.test(s)) return 'approval';
+  if(/مطلوب.*إجراء|waiting.*region|required|respond/.test(s)) return 'required';
+  // "منتهية" means all cases that have already passed through this region,
+  // including externally completed/withdrawn/cancelled/stopped/closed states.
+  if(/تم التوثيق|منسحب|ملغاة|موقوف|closed|document|withdraw|cancel/.test(s)) return 'completed';
+  return 'completed';
+}
+
+function buildRegionManagerBuckets(records){
+  const out={completed:[],approval:[],required:[]};
+  (records||[]).forEach(r=>{
+    const b=regionManagerBucket(r.status);
+    out[b].push(r);
+  });
+  return out;
+}
+
 const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=16;
 const dashboardCache=new Map();
 let schemaReady=null;

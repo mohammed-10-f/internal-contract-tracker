@@ -1,4 +1,25 @@
 
+/* V18.5 — region manager workspace */
+function regionManagerBucket(status){
+  const s=String(status||'').trim().toLowerCase();
+  if(/بانتظار الاعتماد|waiting.*approv|pending.*approv|approval/.test(s)) return 'approval';
+  if(/مطلوب.*إجراء|waiting.*region|required|respond/.test(s)) return 'required';
+  // "منتهية" means all cases that have already passed through this region,
+  // including externally completed/withdrawn/cancelled/stopped/closed states.
+  if(/تم التوثيق|منسحب|ملغاة|موقوف|closed|document|withdraw|cancel/.test(s)) return 'completed';
+  return 'completed';
+}
+
+function buildRegionManagerBuckets(records){
+  const out={completed:[],approval:[],required:[]};
+  (records||[]).forEach(r=>{
+    const b=regionManagerBucket(r.status);
+    out[b].push(r);
+  });
+  return out;
+}
+
+
 const app = document.querySelector("#app");
 
 const roleLabel = {admin:"مدير النظام", manager:"مدير", supervisor:"مشرف", requester:"HR", region:"مسؤول إقليم", viewer:"مشاهد"};
