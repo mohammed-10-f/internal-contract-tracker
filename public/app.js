@@ -100,30 +100,31 @@ function stat(label,value,type="blue",sub=""){return `<div class="statCard"><spa
 function navActive(key){document.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("active",x.dataset.nav===key));}
 function layout(u){
   const admin=u.role==="admin";
+  const navItems=[];
+  navItems.push(`<button data-nav="home" onclick="dash()"><i class="navIcon">${navIcon("home")}</i><span>الرئيسية</span></button>`);
+  navItems.push(`<button data-nav="records" onclick="list()"><i class="navIcon">${navIcon("records")}</i><span>المعاملات</span></button>`);
+  if(u.role==="region") navItems.push(`<button data-nav="required" onclick="list('required')"><i class="navIcon alertIcon">${navIcon("records")}</i><span>مطلوب مني</span><b id="reqBadge">0</b></button>`);
+  if(can("upload_contracts")) navItems.push(`<button data-nav="upload" onclick="uploadPage()"><i class="navIcon">${navIcon("upload")}</i><span>رفع</span></button>`);
+  if(can("view_stats")) navItems.push(`<button data-nav="stats" onclick="statsPage()"><i class="navIcon">${navIcon("stats")}</i><span>تحليل الأداء</span></button>`);
+  if(can("view_closed")) navItems.push(`<button data-nav="closed" onclick="list('closed')"><i class="navIcon">${navIcon("archive")}</i><span>الأرشيف</span></button>`);
+  if(can("manage_users")) navItems.push(`<button data-nav="users" onclick="users()"><i class="navIcon">${navIcon("users")}</i><span>المستخدمون</span></button>`);
+  if(can("manage_regions")) navItems.push(`<button data-nav="regions" onclick="regions()"><i class="navIcon">${navIcon("regions")}</i><span>الأقاليم</span></button>`);
+  if(can("view_audit_log")) navItems.push(`<button data-nav="audit" onclick="auditPage()"><i class="navIcon">${navIcon("audit")}</i><span>سجل النشاط</span></button>`);
   app.innerHTML=`<div class="appShell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brandMark">CC</div><div><strong>متابعة العقود</strong><small>Contract Control</small></div></div>
-      <div class="workspace"><span>WORKSPACE</span><b>${u.role==="region"?"إقليمك":"المركز الرئيسي"}</b></div>
-      <nav>
-        <button data-nav="home" onclick="dash()"><i class="navIcon">${navIcon("home")}</i><span>الرئيسية</span></button>
-        <button data-nav="records" onclick="list()"><i class="navIcon">${navIcon("records")}</i><span>المعاملات</span></button>
-        ${u.role==="region"?`<button data-nav="required" onclick="list('required')"><i class="navIcon alertIcon">${navIcon("records")}</i><span>مطلوب مني</span><b id="reqBadge">0</b></button>`:""}
-        ${can("upload_contracts")?`<button data-nav="upload" onclick="uploadPage()"><i class="navIcon">${navIcon("upload")}</i><span>رفع المعاملات</span></button>`:""}
-        ${can("view_stats")&&u.role!=="region"?`<button data-nav="stats" onclick="statsPage()"><i class="navIcon">${navIcon("stats")}</i><span>تحليلات الأداء</span></button>`:""}
-        ${can("view_closed")?`<button data-nav="closed" onclick="list('closed')"><i class="navIcon">${navIcon("archive")}</i><span>الأرشيف</span></button>`:""}
-        ${(can("manage_users")||can("manage_regions")||can("view_audit_log"))?`<div class="navDivider">الإدارة</div>${can("manage_users")?`<button data-nav="users" onclick="users()"><i class="navIcon">${navIcon("users")}</i><span>المستخدمون والتفويض</span></button>`:""}${can("manage_regions")?`<button data-nav="regions" onclick="regions()"><i class="navIcon">${navIcon("regions")}</i><span>الأقاليم</span></button>`:""}${can("view_audit_log")?`<button data-nav="audit" onclick="auditPage()"><i class="navIcon">${navIcon("audit")}</i><span>سجل النشاط</span></button>`:""}`:""}
-      </nav>
-      <div class="profile"><div class="avatar">${esc(u.name?.[0]||"م")}</div><div class="profileText"><b>${esc(u.name)}</b><small>${roleLabel[u.role]}${u.region?` · ${esc(u.region)}`:""}</small></div><button onclick="logout()">خروج</button></div>
-    </aside>
     <main class="main">
-      <header class="topbar"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="topActions"><div class="connection"><i></i> متصل الآن</div><button class="avatarTop" onclick="${admin?"users()":"dash()"}">${esc(u.name?.[0]||"م")}</button></div></header>
+      <header class="topbar">
+        <div class="topBrand"><div class="brandMark">CC</div><div><strong>متابعة العقود</strong><small>Contract Control</small></div></div>
+        <nav class="topNav">${navItems.join("")}</nav>
+        <div class="topActions"><div class="connection"><i></i> متصل</div><button class="avatarTop" onclick="${admin?"users()":"dash()"}">${esc(u.name?.[0]||"م")}</button><button class="logoutTop" onclick="logout()">خروج</button></div>
+      </header>
+      <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
     </main>
     <div class="mobileBar">
-      <button data-mnav="home" onclick="dash()">⌂<span>الرئيسية</span></button>
-      <button data-mnav="records" onclick="list()">▣<span>المعاملات</span></button>
+      <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
+      <button data-mnav="records" onclick="list()">${navIcon("records")}<span>المعاملات</span></button>
       ${u.role==="region"?`<button data-mnav="required" onclick="list('required')">${navIcon("records")}<span>مطلوب</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
-      ${admin?`<button data-mnav="users" onclick="users()">♙<span>إدارة</span></button>`:""}
+      ${can("manage_users")?`<button data-mnav="users" onclick="users()">${navIcon("users")}<span>المستخدمون</span></button>`:""}
     </div>
   </div>`;
   dash();
@@ -341,15 +342,15 @@ async function users(){
   try{
     const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
-    v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">ACCESS CONTROL</span><h2>الحسابات</h2><p>إدارة الدور، الإقليم، والصلاحيات بدون مغادرة الشاشة.</p></div><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الإقليم</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span>${esc(x.region||"—")}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
+    v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">ACCESS CONTROL</span><h2>الحسابات</h2><p>إدارة الدور، الإقليم، والصلاحيات بدون مغادرة الشاشة.</p></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الإقليم</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span>${esc(x.region||"—")}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
     <section class="section"><div class="sectionHead"><div><span class="eyebrow">DELEGATION CENTER</span><h2>التفويض</h2><p>ينقل معاملات المصدر النشطة، ويُطبق تلقائياً على المعاملات المستقبلية.</p></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active&&["requester","admin"].includes(x.role)).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
 function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)return;const boxes=[...group.querySelectorAll("input[name=perm]")];const all=boxes.length&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 function userFormById(id){const x=usersCache.find(u=>Number(u.id)===Number(id));if(x)userForm(x);else toast("تعذر العثور على المستخدم","err");}
 function userForm(x={role:"requester",permissions:[]}){
-  const checks=permGroups.map(g=>`<div class="permGroup"><h3>${g.title}</h3>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${(x.permissions||[]).includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
-  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">ACCESS CONTROL</span><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr"><option value="requester">HR</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div>`);
+  const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${(x.permissions||[]).includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
+  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">ACCESS CONTROL</span><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr"><option value="requester">HR</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
   const fr=document.querySelector("#fr"),freg=document.querySelector("#freg"); fr.value=x.role||"requester";
   api("/api/regions").then(d=>{if(freg)freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""}>${esc(r.name||r)}</option>`).join("")}`});
 }
@@ -357,10 +358,15 @@ async function saveUser(id){
   const modal=document.querySelector(".userModal");
   const permissions=[...modal.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value);
   const username=modal.querySelector("#fu")?.value.trim()||"", name=modal.querySelector("#fn")?.value.trim()||"", password=modal.querySelector("#fp")?.value||"", role=modal.querySelector("#fr")?.value||"requester", region=modal.querySelector("#freg")?.value||"";
-  const b={name,role,region,permissions};if(password)b.password=password;
+  if(role==="region"&&!region)return toast("اختر إقليم مسؤول الإقليم","err"); const b={name,role,region,permissions};if(password)b.password=password;
   if(!id){b.username=username;if(!b.password)return toast("كلمة المرور مطلوبة للمستخدم الجديد","err");}
   try{await api(id?`/api/users/${id}`:"/api/users",{method:"POST",body:JSON.stringify(b)});document.querySelector(".modalShade")?.remove();toast("تم حفظ المستخدم والصلاحيات");users();}
   catch(e){toast(e.message,"err");}
+}
+async function clearTestData(){
+  const ok=prompt("هذا الإجراء يحذف المعاملات والمستخدمين التجريبيين والجلسات والتفويضات. اكتب RESET للتأكيد:");
+  if(ok!=="RESET")return;
+  try{await api("/api/admin/clear-test-data",{method:"POST",body:JSON.stringify({confirm:"RESET"})});toast("تم تنظيف بيانات الاختبار بنجاح");users();}catch(e){toast(e.message,"err");}
 }
 async function toggleUser(id){try{await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify({action:"toggle"})});users();}catch(e){toast(e.message,"err");}}
 async function createDelegation(){

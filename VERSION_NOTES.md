@@ -17,3 +17,5 @@
 - التصدير أصبح CSV متوافقًا مباشرة مع Excel لتقليل الاعتماد على مكتبة كبيرة في كل صفحة.
 - تحسين تنزيل نموذج Excel بإرسال Content-Disposition صريح.
 - إضافة account_id في wrangler.toml لضمان النشر على حساب Cloudflare الصحيح.
+
+V15.0 — Desktop Command Navigation + User/Permission Reliability + Test Data Cleanup
