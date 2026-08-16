@@ -26,9 +26,9 @@ const permLabel = {
 };
 const roleDefaults = {
   admin: Object.keys(permLabel),
-  requester: ["view_records","upload_contracts","approve","export","view_stats","view_closed"],
-  region: ["view_records","respond_region","view_closed","view_stats","reassign_records"],
-  viewer: ["view_records","view_closed"]
+  requester: ["view_records","upload_contracts","approve","export","reassign_records","delegate_records","manage_delegations","view_stats","view_audit_log","export_audit_log","view_closed"],
+  region: ["view_records","respond_region"],
+  viewer: ["view_records"]
 };
 const permGroups = [
   {title:"المعاملات", items:["view_records","upload_contracts","respond_region","approve","stop_records","cancel_records","reassign_records","delegate_records","view_closed","reactivate_records","export","view_stats"]},
@@ -52,6 +52,7 @@ const fmtDateTime = x => {
   const m=s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : fmtDate(x);
 };
+const compactDuration = sec => { sec=Math.max(0,Math.floor(Number(sec)||0)); const d=Math.floor(sec/86400); sec%=86400; const h=Math.floor(sec/3600); sec%=3600; const m=Math.floor(sec/60); if(d)return `${d}ي ${h}س`; if(h)return `${h}س ${m}د`; return `${m}د`; };
 const duration = sec => {
   sec=Math.max(0,Math.floor(Number(sec)||0));
   const d=Math.floor(sec/86400); sec%=86400;
@@ -132,7 +133,6 @@ function layout(u){
   const navItems=[];
   navItems.push(`<button data-nav="home" onclick="dash()"><i class="navIcon">${navIcon("home")}</i><span>الرئيسية</span></button>`);
   navItems.push(`<button data-nav="records" onclick="list()"><i class="navIcon">${navIcon("records")}</i><span>المعاملات</span></button>`);
-  if(u.role==="region") navItems.push(`<button data-nav="required" onclick="list('required')"><i class="navIcon alertIcon">${navIcon("records")}</i><span>مطلوب مني</span><b id="reqBadge">0</b></button>`);
   if(can("upload_contracts")) navItems.push(`<button data-nav="upload" onclick="uploadPage()"><i class="navIcon">${navIcon("upload")}</i><span>رفع</span></button>`);
   if(can("view_stats")) navItems.push(`<button data-nav="stats" onclick="statsPage()"><i class="navIcon">${navIcon("stats")}</i><span>تحليل الأداء</span></button>`);
   if(can("view_closed")) navItems.push(`<button data-nav="closed" onclick="list('closed')"><i class="navIcon">${navIcon("archive")}</i><span>الأرشيف</span></button>`);
@@ -148,17 +148,17 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
-      <footer class="appFooter"><span>Contract Control</span><b>V18.0</b><span>نظام متابعة العقود</span></footer>
+      <footer class="appFooter"><span>Contract Control</span><b>V18.1</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
       <button data-mnav="records" onclick="list()">${navIcon("records")}<span>المعاملات</span></button>
-      ${u.role==="region"?`<button data-mnav="required" onclick="list('required')">${navIcon("records")}<span>مطلوب</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
+${u.role==="region"?`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>أدائي</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
       ${can("manage_users")?`<button data-mnav="users" onclick="users()">${navIcon("users")}<span>المستخدمون</span></button>`:""}
     </div>
   </div>`;
   dash();
-  if(u.role==="region") refreshBadge();
+
 }
 function login(){
   clearInterval(timerInterval);clearInterval(idleGuard);ME=null;
@@ -211,7 +211,7 @@ async function list(mode=""){
   title(mode==="closed"?"الأرشيف":mode==="required"?"المطلوب مني":"المعاملات",mode==="required"?"المعاملات التي تحتاج إجراءك الآن":"ابحث، صفِّ، وافتح أي معاملة من بطاقة موحدة");
   const v=document.querySelector("#view");
   v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INBOX</span><h2>${mode==="required"?"مطلوب منك الآن":"كل المعاملات"}</h2></div>${can("export")?`<button class="soft" onclick="exportFromList()">تصدير النتائج</button>`:""}</div>
-  <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة"><select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select><select id="regionFilter"><option value="">كل الأقاليم</option></select><label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div></section>`;
+${ME.role==="region"?`<div class="inboxTabs"><button class="${mode===""?"active":""}" onclick="list('')">الكل</button><button class="${mode==="required"?"active":""}" onclick="list('required')">مطلوب مني <b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')">بانتظار الاعتماد</button><button class="${mode==="closed"?"active":""}" onclick="list('closed')">المكتملة</button></div>`:""}<div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة"><select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select><select id="regionFilter"><option value="">كل الأقاليم</option></select><label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div></section>`;
   document.querySelector("#statusFilter").value=mode||"";
   try{const r=await api("/api/regions");document.querySelector("#regionFilter").innerHTML=`<option value="">كل الأقاليم</option>${(r.regions||[]).map(x=>`<option>${esc(x.name||x)}</option>`).join("")}`}catch{}
   await loadRecords();
@@ -239,14 +239,32 @@ function recordCard(r){
 }
 async function quickRegion(id){
   document.querySelector(".quickActionStrip")?.remove();
-  const d=await api(`/api/records/${id}`),r=d.record;
-  const cards=document.querySelector("#recordCards"); if(!cards)return;
-  cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}"><div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إجراء سريع · #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div><div class="qaField"><small>رقم معاملة التعيين</small><b>${esc(r.transaction_no||"غير مسجل")}</b></div><div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تم التوثيق</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">منسحب</button></div><div id="quickRegionArea" style="grid-column:1/-1"></div></section>`);
-  document.querySelector(".quickActionStrip")?.scrollIntoView({behavior:"smooth",block:"nearest"});
+  try{
+    const d=await api(`/api/records/${id}`),r=d.record;
+    const cards=document.querySelector("#recordCards"); if(!cards)return;
+    cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}">
+      <div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إفادة سريعة · #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div>
+      <div class="qaField"><small>معاملة التعيين</small><b>${esc(r.transaction_no||"—")}</b></div>
+      <div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تم التوثيق</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">منسحب</button></div>
+      <div id="quickRegionArea" class="qaArea"><label>الإفادة<textarea id="quickRegionNote" placeholder="الإفادة المختصرة..."></textarea></label></div>
+    </section>`);
+    document.querySelector(".quickActionStrip")?.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }catch(e){toast(e.message,"err")}
 }
-async function quickRegionSubmit(id,kind){const note=document.querySelector("#quickRegionNote")?.value||"";if(kind==="documented"){try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}}}
-function quickRegionWithdraw(id){const a=document.querySelector("#quickRegionArea");a.innerHTML=`<div class="inlineGrid"><label>تاريخ نهاية الدوام<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع/الإجراء<input id="qTxn"></label></div><button class="danger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل الانسحاب</button>`}
-async function quickRegionWithdrawSubmit(id){const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";if(!end||!txn)return toast("أكمل بيانات الانسحاب","err");try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}}
+async function quickRegionSubmit(id,kind){
+  const note=document.querySelector("#quickRegionNote")?.value||"";
+  if(kind!=="documented")return;
+  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}
+}
+function quickRegionWithdraw(id){
+  const a=document.querySelector("#quickRegionArea");if(!a)return;
+  a.innerHTML=`<div class="qaWithdraw"><label>الإفادة<textarea id="quickRegionNote" placeholder="سبب الانسحاب أو الملاحظة..."></textarea></label><div class="inlineGrid"><label>آخر يوم عمل<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع / اتخاذ الإجراء<input id="qTxn" placeholder="رقم المعاملة"></label></div><button class="qaDanger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل إفادة الانسحاب</button></div>`
+}
+async function quickRegionWithdrawSubmit(id){
+  const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";
+  if(!end||!txn)return toast("أكمل آخر يوم عمل ورقم معاملة الانقطاع / اتخاذ الإجراء","err");
+  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}
+}
 async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد سريع من قائمة المعاملات"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
@@ -257,10 +275,10 @@ async function openRecord(id){
     const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
     const stageDurations={hr:stageSecondsClient(stages,"hr"),region:stageSecondsClient(stages,"region"),approval:stageSecondsClient(stages,"approval"),stopped:stageSecondsClient(stages,"stopped")};
     document.querySelector(".recordSheet").innerHTML=`<button class="modalClose" onclick="closeRecord()">×</button>
-      <div class="detailHero"><div><span class="eyebrow">TRANSACTION #${r.id}</span><h2>${esc(r.employee_name)}</h2><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div>
-      <div class="detailTopGrid"><section class="detailPanel"><div class="panelTitle">ملخص المعاملة</div><div class="infoGrid">${info("رقم الموظف",r.employee_no)}${info("رقم معاملة التعيين",r.transaction_no)}${info("تاريخ المباشرة",fmtDate(r.start_date))}${info("نهاية الدوام",fmtDate(r.end_date))}${info("مسؤول الإقليم",r.region_user_name)}${info("مقدم الطلب",r.requester_name)}${info("تاريخ الرفع",fmtDateTime(r.created_at))}${info("آخر تحديث",fmtDateTime(r.updated_at))}</div></section>
+      <div class="detailHero"><div class="detailIdentity"><span class="eyebrow">CASE #${r.id}</span><h2>${esc(r.employee_name)}</h2><p>${esc(r.employee_no)} · ${esc(r.region)} · ${esc(r.region_user_name||"غير مسند")}</p><div class="detailChips"><span>تعيين: <b>${esc(r.transaction_no||"—")}</b></span>${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<span class="withdrawChip">انقطاع/إجراء: <b>${esc(r.interruption_transaction_no||"—")}</b></span>`:""}</div></div><div class="detailStatus"><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span><small>${active?"نشطة":"غير نشطة"}</small></div></div>
+      <div class="detailTopGrid"><section class="detailPanel caseSummary"><div class="panelTitle">ملخص المعاملة <small>البيانات الأساسية</small></div><div class="infoGrid">${info("رقم الموظف",r.employee_no)}${info("رقم معاملة التعيين",r.transaction_no)}${info("تاريخ المباشرة",fmtDate(r.start_date))}${info("نهاية الدوام",fmtDate(r.end_date))}${info("مسؤول الإقليم",r.region_user_name)}${info("مقدم الطلب",r.requester_name)}${info("تاريخ الرفع",fmtDateTime(r.created_at))}${info("آخر تحديث",fmtDateTime(r.updated_at))}</div></section>
       <section class="detailPanel timePanel"><div class="panelTitle">ساعة المعاملة</div><strong class="bigTimer liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong><small>${active?"العداد يعمل":"العداد متوقف — المعاملة ليست نشطة"}</small><div class="stageTimes"><div><span>HR</span><b>${duration(stageDurations.hr)}</b></div><div><span>مسؤول الإقليم</span><b>${duration(stageDurations.region)}</b></div><div><span>الاعتماد</span><b>${duration(stageDurations.approval)}</b></div></div></section></div>
-      ${r.interruption_transaction_no?`<div class="alertInfo">رقم معاملة الانقطاع/الإجراء: <b>${esc(r.interruption_transaction_no)}</b></div>`:""}
+      ${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<section class="detailPanel withdrawalPanel"><div class="panelTitle">الانقطاع / اتخاذ الإجراء <small>يظهر بعد إفادة الانسحاب</small></div><div class="withdrawGrid"><div><small>رقم المعاملة</small><b>${esc(r.interruption_transaction_no||"—")}</b></div><div><small>آخر يوم عمل</small><b>${fmtDate(r.end_date)}</b></div></div></section>`:""}
       ${r.region_note?`<section class="detailPanel notePanel"><div class="panelTitle">إفادة مسؤول الإقليم <small>${fmtDateTime(r.region_responded_at)}</small></div><p>${esc(r.region_note)}</p></section>`:""}
       <section class="detailPanel actionPanel">${actionsHtml(r)}</section>
       <section class="detailPanel"><div class="panelTitle">مسار المعاملة</div>${horizontalTimeline(r,stages)}</section><section class="detailPanel"><div class="panelTitle">سجل الحركة</div><div class="timeline">${events.length?events.map(e=>`<div class="timelineItem"><i></i><div><b>${esc(e.action)}</b><p>${esc(e.note||"")}</p><small>${fmtDateTime(e.created_at)} · ${esc(e.actor_name||"النظام")}</small></div></div>`).join(""):`<div class="emptyState">لا توجد حركة مسجلة</div>`}</div></section>
@@ -357,7 +375,7 @@ async function statsPage(managerId=""){
     if(!base) throw Error("لا يوجد مسؤول إقليم نشط لتحليل أدائه");
     const [d,regionData]=await Promise.all([api(`/api/manager-stats?manager_id=${base}&from=${encodeURIComponent(localStorage.getItem("statsFrom")||"")}&to=${encodeURIComponent(localStorage.getItem("statsTo")||"")}&region=${encodeURIComponent(localStorage.getItem("statsRegion")||"")}`),ME.role==="admin"?api("/api/regions"):Promise.resolve({regions:[]})]);
     const regionOptions=(regionData.regions||[]).map(x=>`<option ${String(x.name||x)===d.filters.region?"selected":""}>${esc(x.name||x)}</option>`).join("");
-    v.innerHTML=`<section class="section"><div class="analysisToolbar"><div><span class="eyebrow">PERFORMANCE INTELLIGENCE</span><h2>${esc(d.manager.name)}</h2><p>${esc(d.manager.region||"")} · قراءة أداء قابلة للتصدير</p></div>${all?`<select onchange="statsPage(this.value)">${all.managers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(m.region||"")}</option>`).join("")}</select>`:""}</div><div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(d.filters.from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(d.filters.to)}"></label>${ME.role==="admin"?`<label>الإقليم<select id="statsRegion"><option value="">كل الأقاليم</option>${regionOptions}</select></label>`:""}<button class="primary" onclick="applyStats(${d.manager.id})">تطبيق</button><button class="soft" onclick="exportStats(${d.manager.id})">تصدير Excel</button></div><div class="statsGrid">${stat("الإجمالي",d.total,"blue")}${stat("مطلوب إجراء",d.required,"orange")}${stat("مكتمل",d.completed,"green")}${stat("متأخر",d.overdue,"red")}</div><div class="insightGrid"><div class="insight"><small>متوسط مدة المعاملة</small><strong>${esc(d.avg_duration_label)}</strong><span>للمعاملات المغلقة ضمن الفترة</span></div><div class="insight"><small>متوسط زمن استجابة الإقليم</small><strong>${esc(d.avg_response_label)}</strong><span>من الإنشاء حتى الإفادة</span></div><div class="insight"><small>نسبة الالتزام بـ SLA</small><strong>${d.withinSlaRate}%</strong><span>حد التأخير 48 ساعة</span></div><div class="insight"><small>المعاملات المفوضة</small><strong>${d.delegated}</strong><span>خلال الفترة</span></div></div><div class="analysisGrid"><section class="chartCard"><div class="chartHead"><h3>توزيع الحالات</h3><span>${d.total} معاملة</span></div>${(d.statusBreakdown||[]).map(x=>analysisBar(x.label,x.value,d.total)).join("")||`<div class="chartEmpty">لا توجد بيانات</div>`}</section><section class="chartCard"><div class="chartHead"><h3>حجم المعاملات</h3><span>آخر 12 شهراً</span></div>${bars(d.recent)}</section></div></section>`;
+    v.innerHTML=`<section class="section"><div class="analysisToolbar"><div><span class="eyebrow">PERFORMANCE INTELLIGENCE</span><h2>${esc(d.manager.name)}</h2><p>${esc(d.manager.region||"")} · قراءة أداء قابلة للتصدير</p></div>${all?`<select onchange="statsPage(this.value)">${all.managers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(m.region||"")}</option>`).join("")}</select>`:""}</div><div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(d.filters.from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(d.filters.to)}"></label>${ME.role==="admin"?`<label>الإقليم<select id="statsRegion"><option value="">كل الأقاليم</option>${regionOptions}</select></label>`:""}<button class="primary" onclick="applyStats(${d.manager.id})">تطبيق</button><button class="soft" onclick="exportStats(${d.manager.id})">تصدير Excel</button></div><div class="statsGrid">${stat("الإجمالي",d.total,"blue")}${stat("مطلوب إجراء",d.required,"orange")}${stat("مكتمل",d.completed,"green")}${stat("متأخر",d.overdue,"red")}</div><div class="insightGrid"><div class="insight kpiDuration"><small>متوسط مدة المعاملة</small><strong>${esc(compactDuration(d.avg_duration_seconds))}</strong><span>${esc(d.avg_duration_label)} · معاملات مغلقة</span></div><div class="insight kpiDuration"><small>متوسط استجابة الإقليم</small><strong>${esc(compactDuration(d.avg_response_seconds))}</strong><span>${esc(d.avg_response_label)} · حتى أول إفادة</span></div><div class="insight"><small>نسبة الالتزام بـ SLA</small><strong>${d.withinSlaRate}%</strong><span>حد التأخير 48 ساعة</span></div><div class="insight"><small>المعاملات المفوضة</small><strong>${d.delegated}</strong><span>خلال الفترة</span></div></div><div class="analysisGrid"><section class="chartCard"><div class="chartHead"><h3>توزيع الحالات</h3><span>${d.total} معاملة</span></div>${(d.statusBreakdown||[]).map(x=>analysisBar(x.label,x.value,d.total)).join("")||`<div class="chartEmpty">لا توجد بيانات</div>`}</section><section class="chartCard"><div class="chartHead"><h3>حجم المعاملات</h3><span>آخر 12 شهراً</span></div>${bars(d.recent)}</section></div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
