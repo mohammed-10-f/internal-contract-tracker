@@ -1,20 +1,3 @@
-
-const ROLE_PERMISSION_PRESETS = Object.freeze({
-  admin: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats','manage_users','manage_regions','settings'],
-  manager: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats','manage_users','manage_regions'],
-  supervisor: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats'],
-  hr: ['view_records','upload_contracts','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats'],
-  region: ['view_records','respond_region','view_closed','view_stats'],
-  viewer: ['view_records','view_closed']
-});
-function applyRolePermissionPreset(role, root=document){
-  const allowed = new Set(ROLE_PERMISSION_PRESETS[role] || ROLE_PERMISSION_PRESETS.viewer);
-  root.querySelectorAll('input[name="perm"]').forEach(cb => {
-    cb.checked = allowed.has(cb.value);
-  });
-  root.dispatchEvent(new CustomEvent('role-preset-applied', {detail:{role}}));
-}
-
 const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=16;
 const dashboardCache=new Map();
 let schemaReady=null;
@@ -440,42 +423,3 @@ if(u.role==="requester"){esql+=" AND r.requester_id=?";ea.push(u.id)}if(region){
 }}
 
 
-function wireDatePickers(root=document){
-  root.querySelectorAll('input[type="date"]').forEach(el=>{
-    if(el.dataset.pickerWired) return;
-    el.dataset.pickerWired='1';
-    el.addEventListener('click',()=>{
-      try{ if(typeof el.showPicker==='function') el.showPicker(); }catch(_){}
-    });
-    el.addEventListener('keydown',e=>{
-      if(e.key==='Enter'||e.key===' '){
-        try{ if(typeof el.showPicker==='function') el.showPicker(); }catch(_){}
-      }
-    });
-  });
-}
-
-
-/* role-preset-delegation-v18 */
-document.addEventListener('change', function(e){
-  const el=e.target;
-  if(!el || el.tagName!=='SELECT') return;
-  const roleField = el.name==='role' || el.id==='fr' || el.id==='frole';
-  if(!roleField) return;
-  const modal = el.closest('.modal,.modalShade,form') || document;
-  applyRolePermissionPreset(el.value, modal);
-});
-
-/* date-field-delegation-v18 */
-document.addEventListener('click', function(e){
-  const wrapper=e.target.closest('.date-field,.date-picker-field,.field-date,[data-date-field]');
-  if(!wrapper) return;
-  const input=wrapper.querySelector('input[type="date"],input[type="datetime-local"]');
-  if(!input) return;
-  if(e.target===input) return;
-  e.preventDefault();
-  try {
-    if(typeof input.showPicker==='function') input.showPicker();
-    else input.focus(), input.click();
-  } catch(_) { try { input.focus(); } catch(__){} }
-});

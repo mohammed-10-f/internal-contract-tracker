@@ -1,21 +1,4 @@
 
-const ROLE_PERMISSION_PRESETS = Object.freeze({
-  admin: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats','manage_users','manage_regions','settings'],
-  manager: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats','manage_users','manage_regions'],
-  supervisor: ['view_records','upload_contracts','respond_region','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats'],
-  hr: ['view_records','upload_contracts','approve','reassign_records','view_closed','reactivate_records','stop_records','export','view_stats'],
-  region: ['view_records','respond_region','view_closed','view_stats'],
-  viewer: ['view_records','view_closed']
-});
-function applyRolePermissionPreset(role, root=document){
-  const allowed = new Set(ROLE_PERMISSION_PRESETS[role] || ROLE_PERMISSION_PRESETS.viewer);
-  root.querySelectorAll('input[name="perm"]').forEach(cb => {
-    cb.checked = allowed.has(cb.value);
-  });
-  root.dispatchEvent(new CustomEvent('role-preset-applied', {detail:{role}}));
-}
-
-
 const app = document.querySelector("#app");
 
 const roleLabel = {admin:"مدير النظام", manager:"مدير", supervisor:"مشرف", requester:"HR", region:"مسؤول إقليم", viewer:"مشاهد"};
@@ -167,7 +150,7 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
-      <footer class="appFooter"><span>Contract Control</span><b>V18.4</b><span>نظام متابعة العقود</span></footer>
+      <footer class="appFooter"><span>Contract Control</span><b>V18.1</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
@@ -425,7 +408,7 @@ function userFormById(id){const x=usersCache.find(u=>Number(u.id)===Number(id));
 function userForm(x={role:"requester",permissions:roleDefaults.requester}){
   const suggested=(x.id?((x.permissions&&x.permissions.length)?x.permissions:roleDefaults[x.role]||[]):(x.permissions&&x.permissions.length?x.permissions:roleDefaults[x.role]||[]));
   const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
-  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr" onchange="applyRolePreset(this.value)"><option value="requester">HR</option><option value="supervisor">مشرف</option><option value="manager">مدير</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
+  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr" onchange="applySuggestedPerms()"><option value="requester">HR</option><option value="supervisor">مشرف</option><option value="manager">مدير</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
   const fr=document.querySelector("#fr"),freg=document.querySelector("#freg"); fr.value=x.role||"requester";
   api("/api/regions").then(d=>{if(freg)freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""} value="${esc(r.name||r)}">${esc(r.name||r)}</option>`).join("")}`});
   const roleEl=document.querySelector("#fr");
@@ -486,9 +469,14 @@ async function loadAudit(){
 async function exportAudit(){try{const d=await api("/api/audit/export");downloadRows(d.rows||[],"سجل_النشاط");}catch(e){toast(e.message,"err");}}
 async function refreshBadge(){if(ME?.role!=="region")return;try{const d=await api("/api/records?status=required");const b=document.querySelector("#reqBadge");if(b)b.textContent=d.records?.length||0;}catch{}}
 async function logout(){try{await api("/api/logout")}finally{ME=null;login();}}
-document.addEventListener("click",e=>{const label=e.target.closest("label");const input=label?.querySelector("input[type=date],input[type=datetime-local]");if(input&&e.target!==input){try{input.showPicker?.();}catch{input.focus();}}});
+document.addEventListener("pointerdown",e=>{
+  const input=e.target.closest("input[type=date],input[type=datetime-local]");
+  if(input){ try{ input.showPicker?.(); }catch{} return; }
+  const wrapper=e.target.closest("label,.date-field,.date-picker-field,[data-date-field]");
+  const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
+  if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
+});
 window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickRegion=quickRegion;window.quickRegionSubmit=quickRegionSubmit;window.quickRegionWithdraw=quickRegionWithdraw;window.quickRegionWithdrawSubmit=quickRegionWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.regions=regions;window.regionForm=regionForm;window.saveRegion=saveRegion;window.toggleRegion=toggleRegion;window.archiveRegion=archiveRegion;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
-wireDatePickers();
 boot();
 
 
@@ -508,26 +496,4 @@ function wireDatePickers(root=document){
 }
 
 
-/* role-preset-delegation-v18 */
-document.addEventListener('change', function(e){
-  const el=e.target;
-  if(!el || el.tagName!=='SELECT') return;
-  const roleField = el.name==='role' || el.id==='fr' || el.id==='frole';
-  if(!roleField) return;
-  const modal = el.closest('.modal,.modalShade,form') || document;
-  applyRolePermissionPreset(el.value, modal);
-});
-
-/* date-field-delegation-v18 */
-document.addEventListener('click', function(e){
-  const wrapper=e.target.closest('.date-field,.date-picker-field,.field-date,[data-date-field]');
-  if(!wrapper) return;
-  const input=wrapper.querySelector('input[type="date"],input[type="datetime-local"]');
-  if(!input) return;
-  if(e.target===input) return;
-  e.preventDefault();
-  try {
-    if(typeof input.showPicker==='function') input.showPicker();
-    else input.focus(), input.click();
-  } catch(_) { try { input.focus(); } catch(__){} }
-});
+function applyRolePreset(role){ const modal=document.querySelector(".userModal"); const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); }
