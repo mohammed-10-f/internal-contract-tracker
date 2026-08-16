@@ -309,10 +309,10 @@ async function list(mode=""){
   v.innerHTML=`<section class="section">
     <div class="sectionHead"><div><span class="eyebrow">TRANSACTION INBOX</span><h2>${esc(pageTitle)}</h2></div>${can("export")?`<button class="soft" onclick="exportFromList()">تصدير النتائج</button>`:""}</div>
     ${ME.role==="region"?`<div class="regionWorkspace"><div class="regionWorkspaceIntro"><span class="eyebrow">REGION WORKSPACE</span><strong>صندوق عمل الإقليم</strong><small>مطلوب منك · بانتظار الاعتماد · منتهية</small></div><div class="inboxTabs regionTabs"><button class="${mode==="required"?"active":""}" onclick="list('required')"><span>مطلوب مني</span><b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')"><span>بانتظار الاعتماد</span><b id="approvalBadge">0</b></button><button class="${mode==="closed"?"active":""}" onclick="list('closed')"><span>منتهية</span><b id="closedBadge">0</b></button></div></div>`:""}
-    <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة">${ME.role==="region"?"":`<select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select>`}<select id="regionFilter"><option value="">كل الأقاليم</option></select><label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div>
+    <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة">${ME.role==="region"?"":`<select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select>`}${ME.role==="region"?"":`<select id="managerFilter"><option value="">كل المسؤولين</option></select>`}<label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div>
   </section>`;
   if(ME.role!=="region"){const sf=document.querySelector("#statusFilter");if(sf)sf.value=mode||"";}
-  try{const r=await api("/api/regions");const rf=document.querySelector("#regionFilter");if(rf)rf.innerHTML=`<option value="">كل الأقاليم</option>${(r.regions||[]).map(x=>`<option>${esc(x.name||x)}</option>`).join("")}`}catch{}
+  try{const d=await api("/api/managers");const mf=document.querySelector("#managerFilter");if(mf)mf.innerHTML=`<option value="">كل المسؤولين</option>${(d.managers||[]).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}`}catch{}
   await loadRecords();
   if(ME.role==="region") refreshRegionWorkspaceCounts();
 }
@@ -327,8 +327,8 @@ async function refreshRegionWorkspaceCounts(){
   }catch(_){ }
 }
 async function loadRecords(){
-  const q=document.querySelector("#q")?.value||"", status=document.querySelector("#statusFilter")?.value||"", region=document.querySelector("#regionFilter")?.value||"", from=document.querySelector("#fromFilter")?.value||"", to=document.querySelector("#toFilter")?.value||"";
-  const qs=new URLSearchParams({q,status,region,from,to});
+  const q=document.querySelector("#q")?.value||"", status=document.querySelector("#statusFilter")?.value||"", manager_id=document.querySelector("#managerFilter")?.value||"", from=document.querySelector("#fromFilter")?.value||"", to=document.querySelector("#toFilter")?.value||"";
+  const qs=new URLSearchParams({q,status,manager_id,from,to});
   const target=document.querySelector("#recordCards");if(!target)return;
   target.innerHTML=`<div class="loading">جاري جلب المعاملات…</div>`;
   try{
@@ -342,10 +342,25 @@ async function loadRecords(){
 async function loadMoreRecords(btn){
  const q=document.querySelector("#q")?.value||"",status=document.querySelector("#statusFilter")?.value||"",region=document.querySelector("#regionFilter")?.value||"",from=document.querySelector("#fromFilter")?.value||"",to=document.querySelector("#toFilter")?.value||"";
  const current=document.querySelectorAll(".recordCard").length;btn.disabled=true;btn.textContent="جاري التحميل…";
- try{const qs=new URLSearchParams({q,status,region,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
+ try{const qs=new URLSearchParams({q,status,manager_id,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
 function recordCard(r){
-  const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  return `<article class="recordCard" onclick="openRecord(${r.id})"><div class="recordAccent ${r.status}"></div><div class="recordHead"><div><div class="recordNoBlock"><span class="recordNo">#${r.id}</span>${r.transaction_no?`<span class="actionTxn">معاملة الإجراء: ${esc(r.transaction_no)}</span>`:""}${r.interruption_transaction_no?`<span class="interruptionTxn">الانقطاع: ${esc(r.interruption_transaction_no)}</span>`:""}</div><h3>${esc(r.employee_name)}</h3><p>${esc(r.employee_no)} · ${esc(r.region)}</p></div><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span></div><div class="recordMeta"><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span><span>رفع <b>${fmtDate(r.created_at)}</b></span><span>المسؤول <b>${esc(r.region_user_name||"—")}</b></span></div><div class="recordFooter"><div><small>${active?"مدة المعاملة":"مدة المعاملة النهائية"}</small><strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></div><div class="cardActions">${(ME?.role==="region"&&["waiting_region","returned"].includes(r.status)&&can("respond_region"))?`<button class="quickBtn qaPrimary" onclick="event.stopPropagation();quickRegionSubmit(${r.id},'documented')">تم التوثيق</button><button class="quickBtn qaDanger" onclick="event.stopPropagation();quickRegion(${r.id})">منسحب</button>`:""}${(can("approve")&&["region_documented","region_withdrawn"].includes(r.status))?`<button class="quickBtn approve" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}<button class="openBtn" onclick="event.stopPropagation();openRecord(${r.id})">التفاصيل</button></div></div></article>`;
+  const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
+  const actionNo=r.interruption_transaction_no||"";
+  const canRegion=ME?.role==="region" && can("respond_region") && ["waiting_region","returned"].includes(r.status);
+  const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["region_documented","region_withdrawn"].includes(r.status);
+  return `<article class="case-card-1s" onclick="openRecord(${r.id})">
+    <div class="case-card-1s__identity">
+      <div class="case-card-1s__title"><span>${esc(r.employee_name)}</span><span class="case-card-1s__id">#${r.id}</span></div>
+      <div class="case-card-1s__meta"><span>موظف <b>${esc(r.employee_no)}</b></span><span>${esc(r.region||"—")}</span><span>تعيين <b>${esc(r.transaction_no||"—")}</b></span>${actionNo?`<span>انقطاع/إجراء <b>${esc(actionNo)}</b></span>`:""}</div>
+      <div class="case-card-1s__summary"><span>المسؤول: <strong>${esc(r.region_user_name||"—")}</strong></span><span>${finished?"انتهت":"آخر إجراء"}: <strong>${esc(statusLabel[r.status]||r.status)}</strong></span><span>المدة: <strong class="liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong></span></div>
+    </div>
+    <div class="case-card-1s__actions" onclick="event.stopPropagation()">
+      <span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span>
+      ${canRegion?`<button class="quickBtn qaPrimary" onclick="quickRegionSubmit(${r.id},'documented')">تم التوثيق</button><button class="quickBtn qaDanger" onclick="quickRegionWithdraw(${r.id})">منسحب</button>`:""}
+      ${canApprove?`<button class="quickBtn approve" onclick="quickApprove(${r.id},'${r.status}')">اعتماد</button>`:""}
+      <button class="openBtn" onclick="openRecord(${r.id})">التفاصيل</button>
+    </div>
+  </article>`;
 }
 async function quickRegion(id){
   document.querySelector(".quickActionStrip")?.remove();
@@ -367,15 +382,24 @@ async function quickRegionSubmit(id,kind){
   try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}
 }
 function quickRegionWithdraw(id){
-  const a=document.querySelector("#quickRegionArea");if(!a)return;
-  a.innerHTML=`<div class="qaWithdraw"><label>الإفادة<textarea id="quickRegionNote" placeholder="سبب الانسحاب أو الملاحظة..."></textarea></label><div class="inlineGrid"><label>آخر يوم عمل<input id="qEnd" type="date"></label><label>رقم معاملة الانقطاع / اتخاذ الإجراء<input id="qTxn" placeholder="رقم المعاملة"></label></div><button class="qaDanger wide" onclick="quickRegionWithdrawSubmit(${id})">تسجيل إفادة الانسحاب</button></div>`
+  document.querySelector(".withdrawalModal1s")?.remove();
+  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade withdrawalModal1s"><div class="withdrawalModal1s__box">
+    <button class="modalClose" onclick="this.closest('.withdrawalModal1s').remove()">×</button>
+    <span class="eyebrow">REGION DECISION</span><h2>إفادة انسحاب الموظف</h2>
+    <p class="withdrawalModal1s__hint">سجل آخر يوم عمل ورقم معاملة الانقطاع / اتخاذ الإجراء ثم اعتمد الإفادة.</p>
+    <div class="withdrawal-1s__grid">
+      <label class="withdrawal-1s__field">آخر يوم عمل<input id="qEnd" type="date"></label>
+      <label class="withdrawal-1s__field">رقم معاملة الانقطاع / اتخاذ الإجراء<input id="qTxn" inputmode="numeric" placeholder="رقم المعاملة"></label>
+    </div>
+    <button class="danger wide big" onclick="quickRegionWithdrawSubmit(${id})">تسجيل إفادة الانسحاب</button>
+  </div></div>`);
 }
 async function quickRegionWithdrawSubmit(id){
   const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";
   if(!end||!txn)return toast("أكمل آخر يوم عمل ورقم معاملة الانقطاع / اتخاذ الإجراء","err");
-  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}
+  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".withdrawalModal1s")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}
 }
-async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد سريع من قائمة المعاملات"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
+async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
   document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet"><button class="modalClose" onclick="closeRecord()">×</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
@@ -385,10 +409,10 @@ async function openRecord(id){
     const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
     const stageDurations={hr:stageSecondsClient(stages,"hr"),region:stageSecondsClient(stages,"region"),approval:stageSecondsClient(stages,"approval"),stopped:stageSecondsClient(stages,"stopped")};
     document.querySelector(".recordSheet").innerHTML=`<button class="modalClose" onclick="closeRecord()">×</button>
-      <div class="detailHero"><div class="detailIdentity"><span class="eyebrow">CASE #${r.id}</span><h2>${esc(r.employee_name)}</h2><p>${esc(r.employee_no)} · ${esc(r.region)} · ${esc(r.region_user_name||"غير مسند")}</p><div class="detailChips"><span>تعيين: <b>${esc(r.transaction_no||"—")}</b></span>${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<span class="withdrawChip">انقطاع/إجراء: <b>${esc(r.interruption_transaction_no||"—")}</b></span>`:""}</div></div><div class="detailStatus"><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span><small>${active?"نشطة":"غير نشطة"}</small></div></div>
+      <div class="detailHero"><div class="detailIdentity"><span class="eyebrow">CASE #${r.id}</span><h2>${esc(r.employee_name)}</h2><p>${esc(r.employee_no)} · ${esc(r.region)} · ${esc(r.region_user_name||"غير مسند")}</p><div class="detailChips"><span>تعيين: <b>${esc(r.transaction_no||"—")}</b></span>${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<span class="withdrawChip">انقطاع/إجراء: <b>${esc(r.interruption_transaction_no||"—")}</b></span>`:""}</div></div><div class="detailStatus"><span class="statusPill ${r.status}">${esc(statusLabel[r.status]||r.status)}</span><small>${active?"العداد مستمر":"العداد متوقف"}</small></div></div>
       <div class="detailTopGrid"><section class="detailPanel caseSummary"><div class="panelTitle">ملخص المعاملة <small>البيانات الأساسية</small></div><div class="infoGrid">${info("رقم الموظف",r.employee_no)}${info("رقم معاملة التعيين",r.transaction_no)}${info("تاريخ المباشرة",fmtDate(r.start_date))}${info("نهاية الدوام",fmtDate(r.end_date))}${info("مسؤول الإقليم",r.region_user_name)}${info("مقدم الطلب",r.requester_name)}${info("تاريخ الرفع",fmtDateTime(r.created_at))}${info("آخر تحديث",fmtDateTime(r.updated_at))}</div></section>
       <section class="detailPanel timePanel"><div class="panelTitle">ساعة المعاملة</div><strong class="bigTimer liveTimer" data-start="${esc(r.timer_start_at||r.created_at)}" data-paused="${r.paused_seconds||0}" data-end="${esc(r.timer_end_at||"")}">${esc(r.duration_label||"—")}</strong><small>${active?"العداد يعمل":"العداد متوقف — المعاملة ليست نشطة"}</small><div class="stageTimes"><div><span>HR</span><b>${duration(stageDurations.hr)}</b></div><div><span>مسؤول الإقليم</span><b>${duration(stageDurations.region)}</b></div><div><span>الاعتماد</span><b>${duration(stageDurations.approval)}</b></div></div></section></div>
-      ${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<section class="detailPanel withdrawalPanel"><div class="panelTitle">الانقطاع / اتخاذ الإجراء <small>يظهر بعد إفادة الانسحاب</small></div><div class="withdrawGrid"><div><small>رقم المعاملة</small><b>${esc(r.interruption_transaction_no||"—")}</b></div><div><small>آخر يوم عمل</small><b>${fmtDate(r.end_date)}</b></div></div></section>`:""}
+      ${(r.status==="region_withdrawn"||r.status==="final_withdrawn"||r.interruption_transaction_no)?`<section class="detailPanel withdrawalPanel"><div class="panelTitle">الانقطاع / اتخاذ الإجراء</div><div class="withdrawGrid"><div><small>رقم المعاملة</small><b>${esc(r.interruption_transaction_no||"—")}</b></div><div><small>آخر يوم عمل</small><b>${fmtDate(r.end_date)}</b></div></div></section>`:""}
       ${r.region_note?`<section class="detailPanel notePanel"><div class="panelTitle">إفادة مسؤول الإقليم <small>${fmtDateTime(r.region_responded_at)}</small></div><p>${esc(r.region_note)}</p></section>`:""}
       <section class="detailPanel actionPanel">${actionsHtml(r)}</section>
       <section class="detailPanel"><div class="panelTitle">مسار المعاملة</div>${horizontalTimeline(r,stages)}</section><section class="detailPanel"><div class="panelTitle">سجل الحركة</div><div class="timeline">${events.length?events.map(e=>`<div class="timelineItem"><i></i><div><b>${esc(e.action)}</b><p>${esc(e.note||"")}</p><small>${fmtDateTime(e.created_at)} · ${esc(e.actor_name||"النظام")}</small></div></div>`).join(""):`<div class="emptyState">لا توجد حركة مسجلة</div>`}</div></section>
@@ -413,13 +437,13 @@ function horizontalTimeline(r,stages){
 }
 function actionsHtml(r){
   const admin=ME.role==="admin", regionCan=can("respond_region")&&(ME.role==="region"||admin), approveCan=can("approve")&&(ME.role==="requester"||admin), active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  let h=`<div class="actionHeader"><div><span class="eyebrow">NEXT ACTION</span><h3>${active?"الإجراء المتاح الآن":"المعاملة غير نشطة"}</h3></div></div>`;
+  let h=`<div class="actionHeader"><div><span class="eyebrow">NEXT ACTION</span><h3>${active?"الإجراء المتاح الآن":"حالة المعاملة"}</h3></div></div>`;
   if((r.status==="waiting_region"||r.status==="returned")&&regionCan) h+=`<div class="actionBlock priority"><h4>إفادة مسؤول الإقليم</h4><textarea id="detailNote" placeholder="اكتب الإفادة المختصرة والواضحة"></textarea><div class="actionButtons"><button class="primary" onclick="perform(${r.id},'region_documented')">✓ تم التوثيق</button><button class="danger" onclick="withdrawForm(${r.id})">منسحب الموظف</button></div><div id="withdrawArea"></div></div>`;
   if((r.status==="region_documented"||r.status==="region_withdrawn")&&approveCan) h+=`<div class="actionBlock"><h4>مراجعة HR واعتماد النتيجة</h4><textarea id="approveNote" placeholder="ملاحظة الاعتماد — اختيارية"></textarea><div class="actionButtons"><button class="primary" onclick="perform(${r.id},'final_documented','approveNote')">اعتماد وإغلاق</button>${r.status==="region_withdrawn"?`<button class="danger" onclick="perform(${r.id},'final_withdrawn','approveNote')">اعتماد الانسحاب</button>`:""}<button class="soft" onclick="perform(${r.id},'return','approveNote')">↩ إرجاع للتصحيح</button></div></div>`;
   if(active&&can("stop_records")) h+=`<div class="actionBlock compact"><h4>إيقاف المعاملة</h4><textarea id="stopNote" placeholder="سبب الإيقاف — اختياري"></textarea><button class="danger wide" onclick="perform(${r.id},'stop','stopNote')">إيقاف المعاملة</button></div>`;
   if(can("reassign_records")&&active) h+=`<div class="actionBlock compact"><h4>الإسناد</h4><p>الإسناد ينقل هذه المعاملة فقط لمسؤول إقليم آخر.</p><div id="reassignWrap">جاري تحميل المسؤولين…</div><textarea id="reassignNote" placeholder="سبب الإسناد — اختياري"></textarea><button class="primary wide" onclick="reassign(${r.id})">سحب وإسناد المعاملة</button></div>`;
   if(can("reactivate_records")&&["stopped","final_documented","final_withdrawn","cancelled"].includes(r.status))h+=`<div class="actionBlock compact"><button class="primary wide" onclick="perform(${r.id},'reactivate')">↻ إعادة تنشيط المعاملة</button></div>`;
-  if(r.requester_note)h+=`<div class="notePanel"><b>ملاحظة HR</b><p>${esc(r.requester_note)}</p></div>`;
+  if(r.requester_note)h+=`<div class="notePanel"><b>ملاحظة</b><p>${esc(r.requester_note)}</p></div>`;
   return h;
 }
 async function withdrawForm(id){
@@ -492,7 +516,7 @@ function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;re
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
 function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");localStorage.setItem("statsRegion",document.querySelector("#statsRegion")?.value||"");statsPage(id);}
 async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||"",region:localStorage.getItem("statsRegion")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}
-async function exportFromList(){try{const qs=new URLSearchParams({q:document.querySelector("#q")?.value||"",status:document.querySelector("#statusFilter")?.value||"",region:document.querySelector("#regionFilter")?.value||"",from:document.querySelector("#fromFilter")?.value||"",to:document.querySelector("#toFilter")?.value||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تقرير_المعاملات");}catch(e){toast(e.message,"err");}}
+async function exportFromList(){try{const qs=new URLSearchParams({q:document.querySelector("#q")?.value||"",status:document.querySelector("#statusFilter")?.value||"",manager_id:document.querySelector("#managerFilter")?.value||"",from:document.querySelector("#fromFilter")?.value||"",to:document.querySelector("#toFilter")?.value||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تقرير_المعاملات");}catch(e){toast(e.message,"err");}}
 function downloadRows(rows,name){
  if(!rows.length){toast("لا توجد بيانات للتصدير","err");return;}
  const keys=Object.keys(rows[0]);

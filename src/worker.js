@@ -108,7 +108,7 @@ const DEFAULT_REGIONS=["الرياض","مكة المكرمة","المدينة ا
 const ROLE_DEFAULTS={
  admin:ALL_PERMS,
  manager:["view_records","upload_contracts","respond_region","approve","manage_users","manage_regions","manage_delegations","settings","stop_records","cancel_records","export","reassign_records","delegate_records","view_closed","reactivate_records","view_stats","view_audit_log","export_audit_log"],
- supervisor:["view_records","upload_contracts","respond_region","approve","reassign_records","view_closed","view_stats","view_audit_log","export"],
+ supervisor:["view_records","view_closed","view_stats","view_audit_log","export"],
  requester:["view_records","upload_contracts","approve","export","reassign_records","delegate_records","manage_delegations","view_stats","view_audit_log","export_audit_log"],
  region:["view_records","respond_region"],
  viewer:["view_records"]
@@ -300,13 +300,13 @@ export default {async fetch(req,env){
  }
  if(p==="/api/records"&&req.method==="GET"){
   await syncDelegations(env);
-  const q=url.searchParams.get("q")||"",s=url.searchParams.get("status")||"",region=url.searchParams.get("region")||"",from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"",limit=Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||60))),offset=Math.max(0,Number(url.searchParams.get("offset")||0));let sql=`SELECT r.*,ru.name region_user_name,req.name requester_name,ou.name original_manager_name,du.name delegated_from_name FROM records r LEFT JOIN users ru ON ru.id=r.region_user_id LEFT JOIN users req ON req.id=r.requester_id LEFT JOIN users ou ON ou.id=r.original_region_user_id LEFT JOIN users du ON du.id=r.delegated_from_user_id WHERE 1=1`,a=[];
+  const q=url.searchParams.get("q")||"",s=url.searchParams.get("status")||"",region=url.searchParams.get("region")||"",managerId=Number(url.searchParams.get("manager_id")||0),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"",limit=Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||60))),offset=Math.max(0,Number(url.searchParams.get("offset")||0));let sql=`SELECT r.*,ru.name region_user_name,req.name requester_name,ou.name original_manager_name,du.name delegated_from_name FROM records r LEFT JOIN users ru ON ru.id=r.region_user_id LEFT JOIN users req ON req.id=r.requester_id LEFT JOIN users ou ON ou.id=r.original_region_user_id LEFT JOIN users du ON du.id=r.delegated_from_user_id WHERE 1=1`,a=[];
   if(u.role==="region"){sql+=" AND (r.region_user_id=? OR r.original_region_user_id=?)";a.push(u.id,u.id)}
   if(u.role==="requester"){sql+=" AND (r.requester_id=? OR r.delegated_to_user_id=?)";a.push(u.id,u.id)}
-  if(region){sql+=" AND r.region=?";a.push(region)}
+  if(managerId){sql+=" AND r.region_user_id=?";a.push(managerId)}
   if(from){sql+=" AND r.created_at>=?";a.push(from+" 00:00:00")}
   if(to){sql+=" AND r.created_at<=?";a.push(to+" 23:59:59")}
-  if(!canSeeClosed(u))sql+=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled')";
+  if(!["admin","manager","supervisor","viewer"].includes(u.role) && !canSeeClosed(u))sql+=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled')";
   if(q){sql+=" AND (r.employee_no LIKE ? OR r.employee_name LIKE ? OR r.transaction_no LIKE ? OR r.interruption_transaction_no LIKE ?)";const z="%"+q+"%";a.push(z,z,z,z)}
   if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='region'?"(r.region_user_id=? OR r.original_region_user_id=?)":"r.requester_id=?"}`,a.push(...(u.role==='region'?[u.id,u.id]:[u.id]));else if(s==="approval")sql+=" AND r.status IN ('region_documented','region_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled','stopped')";else if(s==="overdue"){}else if(s)sql+=" AND r.status=?",a.push(s);
   const countSql=sql; const countArgs=a.slice(); sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset); const [countRow,rows]=await env.DB.batch([env.DB.prepare(`SELECT COUNT(*) c FROM (${countSql})`).bind(...countArgs),env.DB.prepare(sql).bind(...a)]); let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit,total_count:Number(countRow.results?.[0]?.c||0)})
@@ -326,7 +326,7 @@ await stageStart(env,r.id,"region",ru.id);
 await log(env,r.id,u.id,"إنشاء المعاملة من رفع جماعي",`أُسندت إلى ${ru.name}${delegation?` — والمفوض الحالي: ${delegation.target_name}`:""}`);
 dashboardCache.clear(); added++}catch{errors.push({row:x.row_no,reason:"تعذر إنشاء المعاملة"})}}return json({ok:true,added,skipped:errors.length,errors})}
  const m=p.match(/^\/api\/records\/(\d+)$/);if(m&&req.method==="GET"){const id=Number(m[1]),r=await env.DB.prepare(`SELECT r.*,ru.name region_user_name,req.name requester_name,ou.name original_manager_name,du.name delegated_from_name FROM records r LEFT JOIN users ru ON ru.id=r.region_user_id LEFT JOIN users req ON req.id=r.requester_id LEFT JOIN users ou ON ou.id=r.original_region_user_id LEFT JOIN users du ON du.id=r.delegated_from_user_id WHERE r.id=?`).bind(id).first();if(!r)return json({error:"المعاملة غير موجودة"},404);
-const allowed=u.role==="admin"||u.role==="viewer"||u.role==="region"&&r.region_user_id===u.id||u.role==="requester"&&(await isEffectiveRequester(env,r,u));
+const allowed=["admin","manager","supervisor","viewer"].includes(u.role)||u.role==="region"&&(r.region_user_id===u.id||r.original_region_user_id===u.id)||u.role==="requester"&&(await isEffectiveRequester(env,r,u));
 if(!allowed)return json({error:"لا تملك صلاحية فتح هذه المعاملة"},403);
 const ev=await env.DB.prepare(`SELECT a.*,u.name actor_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE a.record_id=? ORDER BY a.id ASC`).bind(id).all();
 let stages=(await env.DB.prepare(`SELECT rs.*,u.name user_name FROM record_stages rs LEFT JOIN users u ON u.id=rs.user_id WHERE rs.record_id=? ORDER BY rs.id ASC`).bind(id).all()).results;
