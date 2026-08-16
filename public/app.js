@@ -7,9 +7,9 @@ const statusLabel = {
   returned:"مرتجع للتصحيح",
   region_documented:"تمت الإفادة — بانتظار اعتماد HR",
   region_withdrawn:"إفادة انسحاب — بانتظار اعتماد HR",
-  final_documented:"تم التوثيق",
-  final_withdrawn:"منسحب الموظف",
-  cancelled:"ملغاة",
+  final_documented:"مكتملة",
+  final_withdrawn:"منتهية",
+  cancelled:"منتهية",
   stopped:"موقوفة"
 };
 const permLabel = {
@@ -116,6 +116,7 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
+      <footer class="appFooter"><span>Contract Control</span><b>V17.0</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
