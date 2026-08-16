@@ -1,4 +1,25 @@
 
+/* 1S — workflow semantics */
+const CASE_STATUS_1S = Object.freeze({
+  REQUIRED:'waiting_region',
+  APPROVAL:'waiting_approval',
+  WITHDRAWAL_APPROVAL:'waiting_withdrawal_approval',
+  CLOSED:'closed',
+  STOPPED:'stopped',
+  CANCELLED:'cancelled',
+  WITHDRAWN:'withdrawn'
+});
+function caseNeedsRegionAction1S(status){
+  return ['waiting_region','returned'].includes(String(status||'').toLowerCase());
+}
+function caseNeedsApproval1S(status){
+  return ['waiting_approval','waiting_withdrawal_approval'].includes(String(status||'').toLowerCase());
+}
+function caseIsFinishedForRegion1S(status){
+  return ['closed','stopped','cancelled','withdrawn','verified','documented'].includes(String(status||'').toLowerCase());
+}
+
+
 /* V18.7 — region action semantics */
 function isRegionRequiredAction(record){
   const s=String(record?.status||'').trim().toLowerCase();
