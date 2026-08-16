@@ -1,4 +1,31 @@
 
+/* 1S v2 — permission & workflow hardening */
+function canViewCase1S(user, record){
+  const role=String(user?.role||user?.user_role||'').toLowerCase();
+  if(['admin','manager','supervisor','viewer'].includes(role)) return true;
+  if(role==='region'){
+    const me=String(user?.id||user?.username||'');
+    const assigned=String(record?.assigned_to??record?.region_manager_id??record?.manager_id??'');
+    return assigned===me || String(record?.region_manager_id||'')===me;
+  }
+  return !!record?.visible;
+}
+function filterByResponsibleManager1S(records, managerId){
+  if(!managerId) return records||[];
+  const id=String(managerId);
+  return (records||[]).filter(r=>String(r?.assigned_to??r?.region_manager_id??r?.manager_id??'')===id);
+}
+function isWithdrawn1S(record){
+  return /منسحب|withdraw/i.test(String(record?.status||''));
+}
+function buildWithdrawalSubmission1S(record, values){
+  return {record_id:record.id,status:'withdrawn',
+    last_work_day:values.last_work_day,
+    action_case_number:values.action_case_number||null,
+    note:values.note||''};
+}
+
+
 /* 1S — workflow semantics */
 const CASE_STATUS_1S = Object.freeze({
   REQUIRED:'waiting_region',

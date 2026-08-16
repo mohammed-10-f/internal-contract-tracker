@@ -449,3 +449,19 @@ input[type="date"]{cursor:pointer;min-height:44px}
 .form-grid>*,.fields-grid>*,.record-form-grid>*,.filter-grid>*{width:100%!important;min-width:0!important;grid-column:1/-1!important}
 input,select,textarea,button{box-sizing:border-box!important;max-width:100%!important}input,select{min-height:44px}textarea{min-height:96px}
 }
+
+
+/* 1S v2 — Case Workspace */
+.case-card-1s{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;background:#fff;border:1px solid #e6eaf0;border-radius:20px;padding:18px 20px;box-shadow:0 8px 24px rgba(16,24,40,.045)}
+.case-card-1s__title{display:flex;gap:9px;align-items:center;font-size:16px;font-weight:850}.case-card-1s__id{color:#667085;font-size:11px;font-weight:800}
+.case-card-1s__meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.case-card-1s__meta span{background:#f8fafc;border:1px solid #e7ebf1;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:700}
+.case-card-1s__summary{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:11px;color:#667085}.case-card-1s__summary strong{color:#172033}
+.case-card-1s__actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.case-card-1s__actions button{min-height:40px;border-radius:11px;font-weight:800}
+.case-summary-1s{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.case-summary-1s__item{padding:14px;border:1px solid #e7ebf1;border-radius:15px;background:#f8fafc}.case-summary-1s__label{font-size:10px;color:#667085;font-weight:750}.case-summary-1s__value{margin-top:5px;font-size:14px;font-weight:850}
+.withdrawal-1s{background:#fff;border:1px solid #e6eaf0;border-radius:20px;padding:20px;box-shadow:0 8px 24px rgba(16,24,40,.045)}.withdrawal-1s__grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.withdrawal-1s__field label{display:block;margin-bottom:7px;font-size:11px;font-weight:800;color:#344054}.withdrawal-1s__field input,.withdrawal-1s__field select,.withdrawal-1s__field textarea{width:100%;min-height:46px;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:12px;padding:10px 12px;background:#fff}.withdrawal-1s__field textarea{min-height:100px;resize:vertical}.withdrawal-1s__actions{display:flex;justify-content:flex-end;margin-top:16px}.withdrawal-1s__actions button{min-height:44px;border-radius:12px;font-weight:850}
+.case-legacy-note,.case-inactive-label,.case-educational-note,.case-help-text,.case-explanation,.quick-approval-note,.hr-fast-approval-note{display:none!important}
+@media(max-width:700px){
+ .case-card-1s{grid-template-columns:1fr;padding:15px}.case-card-1s__actions{justify-content:stretch}.case-card-1s__actions button{flex:1;min-width:0}
+ .case-summary-1s,.withdrawal-1s__grid{grid-template-columns:1fr}
+ .withdrawal-1s__field input,.withdrawal-1s__field select,.withdrawal-1s__field textarea{font-size:16px;min-height:48px}
+}
