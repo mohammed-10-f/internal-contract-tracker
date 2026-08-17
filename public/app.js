@@ -408,7 +408,7 @@ async function quickRegionWithdrawSubmit(id){
 async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
-  document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet v4-sheet"><button class="modalClose v4-close" onclick="closeRecord()">×</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
+  document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet v4-sheet"><button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">× إغلاق</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
   try{
     const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[],stages=d.stages||[];
     selectedRecord=r;

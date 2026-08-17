@@ -573,14 +573,10 @@ select{
    ============================================================ */
 .recordModal{position:fixed;inset:0;background:rgba(6,13,26,.6);backdrop-filter:blur(6px);z-index:80;display:flex;justify-content:flex-start}
 .recordSheet{width:min(920px,94vw);height:100%;background:var(--canvas);overflow-y:auto;padding:22px 26px 60px;box-shadow:0 0 90px rgba(0,0,0,.3);position:relative}
-/* close button — sticky so it stays reachable no matter how far the panel is scrolled.
-   v4-identity below is sticky too, at the same offset, so the button always floats
-   over its own dark card rather than over whatever body text happens to scroll by. */
 .modalClose{
-  position:sticky;top:16px;z-index:30;
-  width:38px;height:38px;margin:16px auto -54px 20px;border-radius:11px;
+  position:absolute;left:20px;top:20px;z-index:5;width:38px;height:38px;border-radius:11px;
   background:#fff;border:1px solid var(--line);color:var(--ink-700);font-size:20px;
-  display:grid;place-items:center;box-shadow:var(--sh-md);
+  display:grid;place-items:center;box-shadow:var(--sh-xs);
 }
 .modalClose:hover{background:var(--slate-50)}
 .cw-error{padding:60px 20px;text-align:center;color:var(--slate-500)}
@@ -588,7 +584,6 @@ select{
 
 .v4-eyebrow{display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;font-weight:600;color:var(--slate-400);margin-bottom:3px;text-transform:uppercase}
 .v4-identity{
-  position:sticky;top:0;z-index:10;
   display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap;
   background:linear-gradient(135deg,var(--ink-900) 0%,var(--ink-700) 100%);color:#fff;
   border-radius:var(--r-xl);padding:24px 26px;box-shadow:var(--sh-md);margin-bottom:16px;
@@ -1026,3 +1021,6 @@ select{
   .withdrawal-1s__grid{grid-template-columns:1fr}
   .userModal,.smallModal{padding:20px}
 }
+
+/* 1S.5 close-button-only patch */
+.modalClose.v4-close{min-width:38px;padding:0 10px;white-space:nowrap;cursor:pointer}
