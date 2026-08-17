@@ -340,7 +340,7 @@ async function loadRecords(){
   }catch(e){target.innerHTML=errorState(e.message);}
 }
 async function loadMoreRecords(btn){
- const q=document.querySelector("#q")?.value||"",status=document.querySelector("#statusFilter")?.value||"",region=document.querySelector("#regionFilter")?.value||"",from=document.querySelector("#fromFilter")?.value||"",to=document.querySelector("#toFilter")?.value||"";
+ const q=document.querySelector("#q")?.value||"",status=document.querySelector("#statusFilter")?.value||"",manager_id=document.querySelector("#managerFilter")?.value||"",from=document.querySelector("#fromFilter")?.value||"",to=document.querySelector("#toFilter")?.value||"";
  const current=document.querySelectorAll(".recordCard").length;btn.disabled=true;btn.textContent="جاري التحميل…";
  try{const qs=new URLSearchParams({q,status,manager_id,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
 function recordCard(r){
@@ -348,6 +348,7 @@ function recordCard(r){
   const canRegion=ME?.role==="region" && can("respond_region") && ["waiting_region","returned"].includes(r.status);
   const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["region_documented","region_withdrawn"].includes(r.status);
   const actionNo=r.interruption_transaction_no||"";
+  const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
   const status=statusLabel[r.status]||r.status||"—";
   const primary=canRegion
     ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`
