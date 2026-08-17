@@ -1,6 +1,9 @@
-# V18.0 Deployment
+# 1S.1 Deployment
 
-1. ارفع محتويات المشروع إلى المستودع المرتبط بـ Cloudflare Workers Builds.
-2. لا تغيّر `database_id` في `wrangler.toml`.
-3. Deploy command: `npx wrangler deploy`.
-4. بعد النشر افتح النظام وتأكد أن أسفل الصفحة يظهر `V18.0`.
+1. اربط المستودع بمشروع Cloudflare Workers.
+2. تأكد من وجود D1 binding باسم `DB` مع `database_id` الصحيح في `wrangler.toml`.
+3. نفذ migrations الموجودة في مجلد `migrations` حسب بيئة النشر.
+4. Deploy باستخدام أمر المشروع الموجود في `package.json`.
+5. بعد النشر تحقق من `/api/me` ثم افتح المعاملات والمستخدمين والإحصائيات.
+
+الإصدار: 1S.1
