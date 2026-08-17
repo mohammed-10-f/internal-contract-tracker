@@ -313,7 +313,7 @@ export default {async fetch(req,env){
  }
  if(p==="/api/managers"&&req.method==="GET"){if(!allow(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
  if(p==="/api/regions"&&req.method==="GET"){const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");const rows=await env.DB.prepare(`SELECT name,active,created_at FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name`).all();return json({regions:rows.results})}
- if(p==="/api/regions"&&req.method==="POST"){if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();if(action==="add"){if(!name)return json({error:"أدخل اسم الإقليم"},400);try{await env.DB.prepare("INSERT INTO regions(name,active) VALUES(?,1)").bind(name).run()}catch{return json({error:"الإقليم موجود مسبقاً"},400)}await log(env,null,u.id,"إضافة إقليم",name);return json({ok:true})}const oldName=String(b.old_name||"").trim();if(!oldName)return json({error:"الإقليم غير محدد"},400);if(action==="edit"){if(!name)return json({error:"أدخل اسم الإقليم الجديد"},400);if(name===oldName)return json({ok:true});if(await env.DB.prepare("SELECT 1 FROM regions WHERE name=?").bind(name).first())return json({error:"اسم الإقليم مستخدم مسبقاً"},400);if(!await env.DB.prepare("SELECT 1 FROM regions WHERE name=? AND active=1").bind(oldName).first())return json({error:"الإقليم غير موجود"},404);await env.DB.prepare("UPDATE regions SET name=? WHERE name=?").bind(name,oldName).run();await env.DB.prepare("UPDATE users SET region=? WHERE region=?").bind(name,oldName).run();await env.DB.prepare("UPDATE records SET region=? WHERE region=?").bind(name,oldName).run();await log(env,null,u.id,"تعديل إقليم",`${oldName} → ${name}`);return json({ok:true})}if(action==="toggle"){const current=await env.DB.prepare("SELECT active FROM regions WHERE name=?").bind(oldName).first();if(!current)return json({error:"الإقليم غير موجود"},404);if(Number(current.active)===1){if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"انقل أو عطّل مسؤول الإقليم أولاً قبل تعطيل الإقليم"},400);}await env.DB.prepare("UPDATE regions SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE name=?").bind(oldName).run();await log(env,null,u.id,"تغيير حالة إقليم",oldName);return json({ok:true})}if(action==="delete"){if(!await env.DB.prepare("SELECT 1 FROM regions WHERE name=? AND active=1").bind(oldName).first())return json({error:"الإقليم غير موجود"},404);if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"لا يمكن حذف الإقليم قبل نقل أو تعطيل مسؤول الإقليم المرتبط به"},400);await env.DB.prepare("UPDATE regions SET active=0 WHERE name=?").bind(oldName).run();await log(env,null,u.id,"حذف/أرشفة إقليم",oldName);return json({ok:true})}return json({error:"إجراء غير معروف"},400)}
+ if(p==="/api/regions"&&req.method==="POST"){if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();if(action==="add"){if(!name)return json({error:"أدخل اسم الإقليم"},400);try{await env.DB.prepare("INSERT INTO regions(name,active) VALUES(?,1)").bind(name).run()}catch{return json({error:"الإقليم موجود مسبقاً"},400)}await log(env,null,u.id,"إضافة إقليم",name);return json({ok:true})}const oldName=String(b.old_name||"").trim();if(!oldName)return json({error:"الإقليم غير محدد"},400);if(action==="edit"){if(!name)return json({error:"أدخل اسم الإقليم الجديد"},400);if(name===oldName)return json({ok:true});if(await env.DB.prepare("SELECT 1 FROM regions WHERE name=?").bind(name).first())return json({error:"اسم الإقليم مستخدم مسبقاً"},400);if(!await env.DB.prepare("SELECT 1 FROM regions WHERE name=?").bind(oldName).first())return json({error:"الإقليم غير موجود"},404);try{await env.DB.batch([env.DB.prepare("UPDATE regions SET name=? WHERE name=?").bind(name,oldName),env.DB.prepare("UPDATE users SET region=? WHERE region=?").bind(name,oldName),env.DB.prepare("UPDATE records SET region=? WHERE region=?").bind(name,oldName)]);}catch(e){return json({error:"تعذر حفظ تعديل الإقليم وتحديث المعاملات المرتبطة به"},400)}await log(env,null,u.id,"تعديل إقليم",`${oldName} → ${name}`);return json({ok:true})}if(action==="toggle"){const current=await env.DB.prepare("SELECT active FROM regions WHERE name=?").bind(oldName).first();if(!current)return json({error:"الإقليم غير موجود"},404);if(Number(current.active)===1){if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"انقل أو عطّل مسؤول الإقليم أولاً قبل تعطيل الإقليم"},400);}await env.DB.prepare("UPDATE regions SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE name=?").bind(oldName).run();await log(env,null,u.id,"تغيير حالة إقليم",oldName);return json({ok:true})}if(action==="delete"){if(!await env.DB.prepare("SELECT 1 FROM regions WHERE name=? AND active=1").bind(oldName).first())return json({error:"الإقليم غير موجود"},404);if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"لا يمكن حذف الإقليم قبل نقل أو تعطيل مسؤول الإقليم المرتبط به"},400);await env.DB.prepare("UPDATE regions SET active=0 WHERE name=?").bind(oldName).run();await log(env,null,u.id,"حذف/أرشفة إقليم",oldName);return json({ok:true})}return json({error:"إجراء غير معروف"},400)}
  if(p==="/api/records"&&req.method==="POST"){if(!allow(u,"upload_contracts"))return json({error:"ليس لديك صلاحية رفع المعاملات"},403);const b=await req.json();if(!b.employee_no||!b.employee_name||!b.region||!b.start_date||!b.transaction_no)return json({error:"أكمل رقم الموظف والاسم والإقليم وتاريخ المباشرة ورقم معاملة التعيين"},400);const ru=await regionUser(env,b.region);if(!ru)return json({error:"لا يوجد مسؤول إقليم نشط مرتبط بهذا الإقليم"},400);const delegation=await currentDelegation(env,u.id);
 const r=await env.DB.prepare(`INSERT INTO records(employee_no,employee_name,region,start_date,transaction_no,status,requester_id,region_user_id,original_region_user_id,delegated_to_user_id,stage_started_at,updated_at) VALUES(?,?,?,?,?,'waiting_region',?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`).bind(b.employee_no.trim(),b.employee_name.trim(),b.region,b.start_date,b.transaction_no.trim(),u.id,ru.id,ru.id,delegation?.target_user_id||null).first();
 await stageStart(env,r.id,"region",ru.id);
@@ -437,60 +437,100 @@ await env.DB.prepare("UPDATE records SET status=?,final_approved_at=NULL,timer_e
   const payload={total:Number(summary?.total||0),required:Number(summary?.required||0),documented:Number(summary?.documented||0),withdrawn:Number(summary?.withdrawn||0),stopped:Number(summary?.stopped||0),overdue:Number(summary?.overdue||0),inprog:Number(summary?.inprog||0),managers,recent_activity:activity.results,sla_hours:SLA_HOURS,report_date:reportDate()}; dashboardCache.set(cacheKey,{at:Date.now(),data:payload}); return json(payload);
  }
  if(p==="/api/manager-stats"&&req.method==="GET"){
-  if(!allow(u,"view_stats")&&u.role!=="region")return json({error:"ليس لديك صلاحية إحصائيات المسؤولين"},403);
-  const requested=Number(url.searchParams.get("manager_id")||0),region=url.searchParams.get("region")||"",from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
+  if(!allow(u,"view_stats")&&u.role!=="region")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
+  const requested=Number(url.searchParams.get("manager_id")||0),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
   const managerId=u.role==="region"?u.id:requested;
-  if(!managerId)return json({error:"اختر مسؤولاً"},400);
-  const manager=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE id=? AND role='region' AND active=1").bind(managerId).first();
-  if(!manager)return json({error:"المسؤول غير موجود"},404);
-  let where=" WHERE region_user_id=?",args=[managerId];
-  if(region){where+=" AND region=?";args.push(region)}
-  if(from){where+=" AND created_at>=?";args.push(from+" 00:00:00")}
-  if(to){where+=" AND created_at<=?";args.push(to+" 23:59:59")}
+  if(u.role==="region" && managerId!==u.id)return json({error:"غير مصرح"},403);
+
+  let manager=null, where="", args=[];
+  if(managerId){
+    manager=await env.DB.prepare("SELECT id,name,username,role,region FROM users WHERE id=? AND active=1 AND role IN ('region','requester')").bind(managerId).first();
+    if(!manager)return json({error:"المستخدم غير موجود"},404);
+    where=manager.role==="region"?" WHERE region_user_id=?":" WHERE requester_id=?";
+    args=[managerId];
+  }else{
+    if(u.role!=="admin")return json({error:"اختر مستخدماً لتحليل أدائه"},400);
+    manager={id:0,name:"كل المستخدمين",username:"",role:"all",region:"كل الأقاليم"};
+  }
+  if(from){where+=(where?" AND":" WHERE")+" created_at>=?";args.push(from+" 00:00:00")}
+  if(to){where+=(where?" AND":" WHERE")+" created_at<=?";args.push(to+" 23:59:59")}
+
   const summaryStmt=env.DB.prepare(`SELECT COUNT(*) total,
-    COALESCE(SUM(CASE WHEN status IN ('waiting_region','returned') THEN 1 ELSE 0 END),0) required,
-    COALESCE(SUM(CASE WHEN status IN ('region_documented','region_withdrawn') THEN 1 ELSE 0 END),0) awaiting,
     COALESCE(SUM(CASE WHEN status IN ('final_documented','final_withdrawn') THEN 1 ELSE 0 END),0) completed,
-    COALESCE(SUM(CASE WHEN status='returned' THEN 1 ELSE 0 END),0) returned,
     COALESCE(SUM(CASE WHEN status='final_documented' THEN 1 ELSE 0 END),0) documented,
     COALESCE(SUM(CASE WHEN status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,
-    COALESCE(SUM(CASE WHEN status='stopped' THEN 1 ELSE 0 END),0) stopped,
-    COALESCE(SUM(CASE WHEN delegated_to_user_id IS NOT NULL THEN 1 ELSE 0 END),0) delegated,
+    COALESCE(SUM(CASE WHEN status IN ('waiting_region','returned','region_documented','region_withdrawn') THEN 1 ELSE 0 END),0) in_progress,
+    COALESCE(SUM(CASE WHEN status IN ('waiting_region','returned') THEN 1 ELSE 0 END),0) required,
     COALESCE(SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue,
     AVG(CASE WHEN final_approved_at IS NOT NULL THEN (julianday(final_approved_at)-julianday(created_at))*86400 END) avg_duration,
-    AVG(CASE WHEN region_responded_at IS NOT NULL THEN (julianday(region_responded_at)-julianday(created_at))*86400 END) avg_response
-    FROM records${where}`).bind(...args);
+    AVG(CASE WHEN region_responded_at IS NOT NULL THEN (julianday(region_responded_at)-julianday(created_at))*86400 END) avg_response,
+    AVG(CASE WHEN final_approved_at IS NOT NULL AND (julianday(final_approved_at)-julianday(created_at))*86400 > ? THEN ((julianday(final_approved_at)-julianday(created_at))*86400-?) END) avg_delay
+    FROM records${where}`).bind(SLA_HOURS*3600,SLA_HOURS*3600,...args);
+
   const recentStmt=env.DB.prepare(`SELECT substr(created_at,1,7) month,COUNT(*) count FROM records${where} GROUP BY substr(created_at,1,7) ORDER BY month DESC LIMIT 12`).bind(...args);
   const statusStmt=env.DB.prepare(`SELECT status key,COUNT(*) value FROM records${where} GROUP BY status`).bind(...args);
   const closedStmt=env.DB.prepare(`SELECT (julianday(final_approved_at)-julianday(created_at))*86400 seconds FROM records${where} AND final_approved_at IS NOT NULL ORDER BY seconds`).bind(...args);
+
   const [summary,recentRows,statusRows,closedRows]=await env.DB.batch([summaryStmt,recentStmt,statusStmt,closedStmt]);
-  const recent=(recentRows.results||[]).reverse();
-  const statusBreakdown=(statusRows.results||[]).map(x=>({key:x.key,label:labels[x.key]||x.key,value:Number(x.value||0)}));
+  const row=summary?.results?.[0]||{};
+  const total=Number(row.total||0),completed=Number(row.completed||0),documented=Number(row.documented||0),withdrawn=Number(row.withdrawn||0);
+  const avgDuration=Math.round(Number(row.avg_duration||0)),avgResponse=Math.round(Number(row.avg_response||0)),avgDelay=Math.round(Number(row.avg_delay||0));
   const closedDur=(closedRows.results||[]).map(x=>Number(x.seconds||0)).filter(x=>x>=0);
   const median=closedDur.length?(closedDur.length%2?closedDur[(closedDur.length-1)/2]:Math.round((closedDur[closedDur.length/2-1]+closedDur[closedDur.length/2])/2)):0;
-  const total=Number(summary?.results?.[0]?.total||0),row=summary?.results?.[0]||{},completed=Number(row.completed||0),avgDuration=Math.round(Number(row.avg_duration||0)),avgResponse=Math.round(Number(row.avg_response||0));
   const withinSla=closedDur.length?Math.round(closedDur.filter(x=>x<SLA_HOURS*3600).length/closedDur.length*100):0;
-  const returned=Number(row.returned||0),documented=Number(row.documented||0),withdrawn=Number(row.withdrawn||0),stopped=Number(row.stopped||0),delegated=Number(row.delegated||0);
-  const quality={documentation_rate:total?Math.round(documented/total*100):0,withdrawal_rate:total?Math.round(withdrawn/total*100):0,rework_rate:total?Math.round(returned/total*100):0,stopped_rate:total?Math.round(stopped/total*100):0,sla_rate:withinSla};
+  const statusBreakdown=(statusRows.results||[]).map(x=>({key:x.key,label:labels[x.key]||x.key,value:Number(x.value||0)}));
+  const recent=(recentRows.results||[]).reverse();
+
   let comparison=[];
-  if(u.role!=='region'){
-    let cw=' WHERE u.role=\'region\' AND u.active=1',ca=[];
-    if(from){cw+=' AND r.created_at>=?';ca.push(from+' 00:00:00')}
-    if(to){cw+=' AND r.created_at<=?';ca.push(to+' 23:59:59')}
-    comparison=(await env.DB.prepare(`SELECT u.id,u.name,u.region,COUNT(r.id) total,
+  if(u.role!=="region"){
+    let cw="",ca=[];
+    if(from){cw+=" AND r.created_at>=?";ca.push(from+" 00:00:00")}
+    if(to){cw+=" AND r.created_at<=?";ca.push(to+" 23:59:59")}
+    comparison=(await env.DB.prepare(`SELECT u.id,u.name,u.username,u.role,u.region,COUNT(r.id) total,
       COALESCE(SUM(CASE WHEN r.status='final_documented' THEN 1 ELSE 0 END),0) documented,
       COALESCE(SUM(CASE WHEN r.status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,
-      COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND r.created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue
-      FROM users u LEFT JOIN records r ON r.region_user_id=u.id${cw} GROUP BY u.id ORDER BY documented DESC,overdue ASC,u.name ASC`).bind(...ca).all()).results.map(x=>{
+      COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND r.created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue,
+      AVG(CASE WHEN r.final_approved_at IS NOT NULL THEN (julianday(r.final_approved_at)-julianday(r.created_at))*86400 END) avg_duration,
+      AVG(CASE WHEN r.region_responded_at IS NOT NULL THEN (julianday(r.region_responded_at)-julianday(r.created_at))*86400 END) avg_response
+      FROM users u LEFT JOIN records r ON (
+        (u.role='region' AND r.region_user_id=u.id) OR
+        (u.role='requester' AND r.requester_id=u.id)
+      )${cw}
+      WHERE u.active=1 AND u.role IN ('region','requester')
+      GROUP BY u.id ORDER BY u.role,u.name`).bind(...ca).all()).results.map(x=>{
         const t=Number(x.total||0), overdueN=Number(x.overdue||0);
-        return {...x,total:t,documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:overdueN,sla_rate:t?Math.max(0,Math.round((t-overdueN)/t*100)):0};
+        const role=x.role;
+        const responseSeconds=role==="region"?Number(x.avg_response||0):Number(x.avg_duration||0);
+        return {...x,total:t,documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:overdueN,
+          avg_time_seconds:Math.round(responseSeconds),
+          avg_time_label:durationLabel(Math.round(responseSeconds)),
+          documentation_rate:t?Math.round(Number(x.documented||0)/t*100):0,
+          withdrawal_rate:t?Math.round(Number(x.withdrawn||0)/t*100):0,
+          sla_rate:t?Math.max(0,Math.round((t-overdueN)/t*100)):0};
       });
-  } else { comparison=[{id:manager.id,name:manager.name,region:manager.region,total,documented,withdrawn,overdue:Number(row.overdue||0),sla_rate:withinSla}]; }
-  return json({manager,filters:{region,from,to},total,required:Number(row.required||0),awaiting:Number(row.awaiting||0),completed,overdue:Number(row.overdue||0),returned,documented,withdrawn,stopped,delegated,receivedByDelegation:delegated,delegatedOut:0,completionRate:total?Math.round(completed/total*100):0,withinSlaRate:withinSla,quality,avg_duration_seconds:avgDuration,avg_duration_label:durationLabel(avgDuration),median_duration_seconds:median,median_duration_label:durationLabel(median),avg_response_seconds:avgResponse,avg_response_label:durationLabel(avgResponse),recent,statusBreakdown,comparison,report_date:reportDate()});
+  }else{
+    const role=manager.role;
+    const responseSeconds=role==="region"?avgResponse:avgDuration;
+    comparison=[{id:manager.id,name:manager.name,username:manager.username,role,region:manager.region,total,documented,withdrawn,overdue:Number(row.overdue||0),
+      avg_time_seconds:responseSeconds,avg_time_label:durationLabel(responseSeconds),
+      documentation_rate:total?Math.round(documented/total*100):0,
+      withdrawal_rate:total?Math.round(withdrawn/total*100):0,sla_rate:withinSla}];
+  }
+
+  const quality={documentation_rate:total?Math.round(documented/total*100):0,withdrawal_rate:total?Math.round(withdrawn/total*100):0,sla_rate:withinSla};
+  return json({
+    manager,filters:{from,to},total,required:Number(row.required||0),inProgress:Number(row.in_progress||0),
+    completed,overdue:Number(row.overdue||0),documented,withdrawn,completionRate:total?Math.round(completed/total*100):0,
+    withinSlaRate:withinSla,quality,avg_duration_seconds:avgDuration,avg_duration_label:durationLabel(avgDuration),
+    median_duration_seconds:median,median_duration_label:durationLabel(median),
+    avg_response_seconds:avgResponse,avg_response_label:durationLabel(avgResponse),
+    avg_delay_seconds:avgDelay,avg_delay_label:durationLabel(avgDelay),
+    recent,statusBreakdown,comparison,report_date:reportDate()
+  });
  }
  if(p==="/api/users"&&req.method==="GET"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const rows=await env.DB.prepare("SELECT id,username,name,role,region,active,permissions,created_at FROM users ORDER BY id DESC").all();return json({users:rows.results.map(x=>({...x,permissions:permsOf(x)}))})}
- if(p==="/api/users"&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const b=await req.json();if(!b.username||!b.name||!b.password||!b.role)return json({error:"أكمل بيانات المستخدم"},400);const ps=(Array.isArray(b.permissions)?b.permissions:(ROLE_DEFAULTS[b.role]||[])).filter(x=>ALL_PERMS.includes(x));try{await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,region,permissions,active) VALUES(?,?,?,?,?,?,1)").bind(b.username,b.name,await hash(b.password),b.role,b.region||null,ps.join(",")).run()}catch{return json({error:"اسم المستخدم مستخدم مسبقاً"},400)}await log(env,null,u.id,"إنشاء مستخدم",`${b.name} — ${b.role}`);return json({ok:true})}
- const um=p.match(/^\/api\/users\/(\d+)$/);if(um&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const id=Number(um[1]),b=await req.json(),target=await env.DB.prepare("SELECT * FROM users WHERE id=?").bind(id).first();if(!target)return json({error:"المستخدم غير موجود"},404);const ps=(b.permissions||[]).filter(x=>ALL_PERMS.includes(x));if(b.action==="toggle"&&target.username!=="admin")await env.DB.prepare("UPDATE users SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").bind(id).run();else{await env.DB.prepare("UPDATE users SET name=?,role=?,region=?,permissions=?,active=? WHERE id=?").bind(b.name||target.name,b.role||target.role,b.region||null,ps.join(","),b.active===undefined?target.active:b.active?1:0,id).run();if(b.password)await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hash(b.password),id).run()}await log(env,null,u.id,"تعديل مستخدم",target.name);return json({ok:true})}
+ if(p==="/api/users"&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const b=await req.json();if(!b.username||!b.name||!b.password||!b.role)return json({error:"أكمل بيانات المستخدم"},400);const region=String(b.region||"").trim()||null;if(b.role==="region"&&!region)return json({error:"اختر إقليم مسؤول الإقليم"},400);if(b.role==="region"&&region){const exists=await env.DB.prepare("SELECT id,name FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(region).first();if(exists)return json({error:`الإقليم مرتبط مسبقاً بالمسؤول ${exists.name}`},400)}const ps=(Array.isArray(b.permissions)?b.permissions:(ROLE_DEFAULTS[b.role]||[])).filter(x=>ALL_PERMS.includes(x));try{await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,region,permissions,active) VALUES(?,?,?,?,?,?,1)").bind(b.username,b.name,await hash(b.password),b.role,region,ps.join(",")).run()}catch{return json({error:"اسم المستخدم مستخدم مسبقاً"},400)}await log(env,null,u.id,"إنشاء مستخدم",`${b.name} — ${b.role}${region?` — ${region}`:""}`);return json({ok:true})}
+ const um=p.match(/^\/api\/users\/(\d+)$/);if(um&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const id=Number(um[1]),b=await req.json(),target=await env.DB.prepare("SELECT * FROM users WHERE id=?").bind(id).first();if(!target)return json({error:"المستخدم غير موجود"},404);const nextRole=b.role||target.role,nextRegion=String(b.region||"").trim()||null,nextActive=b.active===undefined?Number(target.active):b.active?1:0;if(nextRole==="region"&&nextActive&&!nextRegion)return json({error:"اختر إقليم مسؤول الإقليم"},400);if(nextRole==="region"&&nextActive&&nextRegion){const exists=await env.DB.prepare("SELECT id,name FROM users WHERE role='region' AND active=1 AND region=? AND id<>? LIMIT 1").bind(nextRegion,id).first();if(exists)return json({error:`الإقليم مرتبط مسبقاً بالمسؤول ${exists.name}`},400)}const ps=(b.permissions||[]).filter(x=>ALL_PERMS.includes(x));if(b.action==="toggle"&&target.username!=="admin")await env.DB.prepare("UPDATE users SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").bind(id).run();else{await env.DB.prepare("UPDATE users SET name=?,role=?,region=?,permissions=?,active=? WHERE id=?").bind(b.name||target.name,nextRole,nextRegion,ps.join(","),nextActive,id).run();if(b.password)await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hash(b.password),id).run()}await log(env,null,u.id,"تعديل مستخدم",target.name);return json({ok:true})}
  if(p==="/api/admin/clear-test-data"&&req.method==="POST"){
   if(u.role!=="admin"||!allow(u,"manage_data"))return json({error:"للمدير فقط"},403);
   const b=await req.json().catch(()=>({}));

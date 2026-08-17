@@ -350,6 +350,7 @@ function recordCard(r){
   const actionNo=r.interruption_transaction_no||"";
   const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
   const status=statusLabel[r.status]||r.status||"—";
+  const waitingAt=(r.status==="waiting_region"||r.status==="returned")?(r.region_user_name||"مسؤول الإقليم"):"";
   const primary=canRegion
     ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`
     : canApprove
@@ -361,11 +362,15 @@ function recordCard(r){
       <span class="v3-case-number">#${r.id}</span>
       <div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")}</small></div>
     </div>
-    <div class="v3-case-type"><span class="v3-label">النوع</span><b>تعيين</b></div>
+    <div class="v3-case-type"><span class="v3-label">رقم معاملة التعيين</span><b class="v3-monoValue">${esc(r.transaction_no||"—")}</b></div>
     <div class="v3-case-region"><span class="v3-label">الإقليم</span><b>${esc(r.region||"—")}</b></div>
     <div class="v3-case-assignee"><span class="v3-label">المسؤول</span><b>${esc(r.region_user_name||"—")}</b></div>
     <div class="v3-case-status v3-case-status-stack">
-      ${withdrawn ? `<span class="v3-status is-danger">↗ منسحب الموظف</span><span class="v3-status is-danger v3-action-badge">#${esc(actionNo||"—")} — انقطاع / اتخاذ إجراء</span>` : `<span class="v3-status ${finished?'is-done':r.status==='region_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span>`}
+      ${withdrawn
+        ? `<span class="v3-status is-danger">↗ منسحب الموظف</span><span class="v3-status is-danger v3-action-badge">#${esc(actionNo||"—")} — انقطاع / اتخاذ إجراء</span>`
+        : waitingAt
+          ? `<span class="v3-status is-pending">بانتظار الإفادة</span><span class="v3-status is-pending v3-waiting-user">متوقف عند: ${esc(waitingAt)}</span>`
+          : `<span class="v3-status ${finished?'is-done':r.status==='region_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span>`}
     </div>
     <div class="v3-case-action">${primary}<button class="v3-open" aria-label="فتح">↗</button></div>
   </div>`;
@@ -604,23 +609,50 @@ async function importFile(){
 }
 function impactMetric(label,value,total,color,percent=false){const n=Number(value||0),pct=percent?n:((Number(total||0)?Math.round(n/Number(total)*100):0));return `<div class="impactMetric"><div><span>${label}</span><b>${percent?pct+"%":n}</b></div><i class="${color}" style="width:${Math.min(100,pct)}%"></i></div>`}
 async function statsPage(managerId=""){
-  VIEW="stats";navActive("stats");title("تحليلات الأداء","التحليل والتصدير في شاشة واحدة.");
+  VIEW="stats";navActive("stats");title("تحليلات الأداء","قياس أثر المستخدمين بالوقت والنتائج، بعيداً عن عدد الإقليم.");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
-    const all=ME.role==="admin"?await api("/api/dashboard"):null;
-    const base=ME.role==="region"?ME.id:Number(managerId||all?.managers?.[0]?.id||0);
-    if(!base) throw Error("لا يوجد مسؤول إقليم نشط لتحليل أدائه");
-    const [d,regionData]=await Promise.all([api(`/api/manager-stats?manager_id=${base}&from=${encodeURIComponent(localStorage.getItem("statsFrom")||"")}&to=${encodeURIComponent(localStorage.getItem("statsTo")||"")}&region=${encodeURIComponent(localStorage.getItem("statsRegion")||"")}`),ME.role==="admin"?api("/api/regions"):Promise.resolve({regions:[]})]);
-    const regionOptions=(regionData.regions||[]).map(x=>`<option ${String(x.name||x)===d.filters.region?"selected":""}>${esc(x.name||x)}</option>`).join("");
+    const all=ME.role==="admin"?await api("/api/users"):null;
+    const selected=ME.role==="region"?String(ME.id):String(managerId||"0");
+    const [d]=await Promise.all([api(`/api/manager-stats?manager_id=${encodeURIComponent(selected)}&from=${encodeURIComponent(localStorage.getItem("statsFrom")||"")}&to=${encodeURIComponent(localStorage.getItem("statsTo")||"")}`)]);
+    const selectableUsers=(all?.users||[]).filter(x=>x.active&&["requester","region"].includes(x.role));
+    const userOptions=all?`<select class="statsUserSelect" onchange="statsPage(this.value)"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`:"";
+    const roleText=d.manager.role==="region"?"مسؤول إقليم":d.manager.role==="requester"?"HR":"جميع المستخدمين";
+    const compareRows=(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)&&Number(d.manager.id)!==0?'current':''}">
+      <strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}${x.region?` · ${esc(x.region)}`:""}</small></strong>
+      <b>${x.documented}</b>
+      <b>${x.withdrawn}</b>
+      <b>${esc(x.avg_time_label||"—")}</b>
+      <b class="${x.sla_rate>=90?'goodText':x.sla_rate>=70?'warnText':'dangerText'}">${x.sla_rate}%</b>
+    </div>`).join("");
     v.innerHTML=`<section class="section">
-      <div class="analysisToolbar"><div><span class="eyebrow">PERFORMANCE INTELLIGENCE</span><h2>${esc(d.manager.name)}</h2><span class="analysisMeta">${esc(d.manager.region||"")} · قياس أداء المستخدم</span></div>${all?`<select onchange="statsPage(this.value)">${all.managers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(m.region||"")}</option>`).join("")}</select>`:""}</div>
-      <div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(d.filters.from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(d.filters.to)}"></label><button class="primary" onclick="applyStats(${d.manager.id})">تطبيق</button><button class="soft" onclick="exportStats(${d.manager.id})">تصدير Excel</button></div>
-      <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("تحتاج إجراء",d.required,"orange")}${stat("متأخرة الآن",d.overdue,"red")}${stat("نسبة الالتزام",d.withinSlaRate+"%","green")}</div>
+      <div class="analysisToolbar">
+        <div><span class="eyebrow">PERFORMANCE INTELLIGENCE</span><h2>${esc(d.manager.name)}</h2><span class="analysisMeta">${esc(roleText)} · ${esc(d.manager.region||"")}</span></div>
+        ${userOptions}
+      </div>
+      <div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(d.filters.from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(d.filters.to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button><button class="soft" onclick="exportStats(${Number(d.manager.id)||0})">تصدير Excel</button></div>
+      <div class="statsGrid performanceKpis">
+        ${stat("إجمالي المعاملات",d.total,"blue")}
+        ${stat("تم التوثيق",d.documented,"green")}
+        ${stat("منسحب الموظف",d.withdrawn,"orange")}
+        ${stat("متوسط مدة الإغلاق",d.avg_duration_label,"blue")}
+        ${stat("متوسط استجابة الإقليم",d.avg_response_label,"orange")}
+        ${stat("نسبة الالتزام",d.withinSlaRate+"%","green")}
+      </div>
       <div class="analysisGrid performancePanels">
-        <section class="chartCard"><div class="chartHead"><h3>جودة وأثر المستخدم</h3><span>${d.total} معاملة</span></div><div class="impactMetrics">${impactMetric("التوثيق",d.documented,d.total,"green")}${impactMetric("الانسحاب",d.withdrawn,d.total,"orange")}${impactMetric("الالتزام بالوقت",d.withinSlaRate,"", "blue", true)}${impactMetric("تحتاج تدخل الآن",d.required,d.total,"red")}${impactMetric("التأخير الحالي",d.overdue,d.total,"red")}</div></section>
+        <section class="chartCard"><div class="chartHead"><h3>الأثر الفعلي</h3><span>${d.total} معاملة</span></div><div class="impactMetrics">
+          ${impactMetric("نسبة التوثيق",d.quality.documentation_rate,"","green",true)}
+          ${impactMetric("نسبة الانسحاب",d.quality.withdrawal_rate,"","orange",true)}
+          ${impactMetric("الالتزام بالوقت",d.withinSlaRate,"","blue",true)}
+          ${impactMetric("متأخرة الآن",d.overdue,d.total,"red")}
+          ${impactMetric("متوسط التأخير",d.avg_delay_label,"","red",true)}
+        </div></section>
         <section class="chartCard"><div class="chartHead"><h3>توزيع النتائج</h3><span>${d.total} معاملة</span></div>${(d.statusBreakdown||[]).filter(x=>!['returned','stopped','cancelled'].includes(x.key)).map(x=>analysisBar(x.label,x.value,d.total)).join("")||`<div class="chartEmpty">لا توجد بيانات</div>`}</section>
       </div>
-      <section class="chartCard"><div class="chartHead"><h3>مقارنة أداء المستخدمين</h3><span>حسب نفس الفترة</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>التوثيق</span><span>الانسحاب</span><span>متأخرة</span><span>الالتزام</span></div>${(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)?'current':''}"><strong>${esc(x.name)}<small>${esc(x.region||'')}</small></strong><b>${x.documented}</b><b>${x.withdrawn}</b><b class="${x.overdue?'dangerText':''}">${x.overdue}</b><b class="${x.sla_rate>=90?'goodText':x.sla_rate>=70?'warnText':'dangerText'}">${x.sla_rate}%</b></div>`).join("")||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}</div></section>
+      <section class="chartCard"><div class="chartHead"><h3>مقارنة أداء المستخدمين</h3><span>HR ومسؤولي الأقاليم · نفس الفترة</span></div><div class="performanceCompare">
+        <div class="performanceCompareHead"><span>المستخدم</span><span>التوثيق</span><span>الانسحاب</span><span>متوسط الزمن</span><span>الالتزام</span></div>
+        ${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}
+      </div></section>
       <section class="chartCard"><div class="chartHead"><h3>المعاملات حسب الشهر</h3><span>آخر 12 شهر</span></div>${bars(d.recent)}</section>
     </section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
@@ -654,12 +686,14 @@ function userForm(x={role:"requester",permissions:roleDefaults.requester}){
   const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
   document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr" onchange="applySuggestedPerms()"><option value="requester">HR</option><option value="supervisor">مشرف</option><option value="manager">مدير</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
   const fr=document.querySelector("#fr"),freg=document.querySelector("#freg"); fr.value=x.role||"requester";
-  api("/api/regions").then(d=>{if(freg)freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""} value="${esc(r.name||r)}">${esc(r.name||r)}</option>`).join("")}`});
+  api("/api/regions").then(d=>{if(freg){freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""} value="${esc(r.name||r)}">${esc(r.name||r)}</option>`).join("")}`;freg.disabled=(fr.value!=="region");}});
   const roleEl=document.querySelector("#fr");
   if(roleEl){ roleEl.value=x.role||"requester"; roleEl.addEventListener("change",()=>{
-    const wanted=new Set(roleDefaults[roleEl.value]||[]);
-    modal.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value));
-    toast("تم اقتراح الصلاحيات المناسبة للدور");
+    applySuggestedPerms();
+    const freg=document.querySelector("#freg");
+    if(freg) freg.disabled=roleEl.value!=="region";
+    if(roleEl.value!=="region") freg.value="";
+    toast("تم تحديث الصلاحيات المقترحة حسب الدور");
   }); }
   const head=modal.querySelector(".permGrid");
   if(head){ head.insertAdjacentHTML("beforebegin",`<div class="permSuggestion"><span><b>الصلاحيات المقترحة</b><small>يتم اقتراحها تلقائيًا حسب الدور ويمكن تعديلها قبل الحفظ.</small></span><button type="button" class="soft" onclick="applySuggestedPerms()">تطبيق المقترح</button></div>`); }
@@ -699,7 +733,7 @@ async function regions(){
   try{const d=await api("/api/regions?include_inactive=1");document.querySelector("#regionTable").innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>إجراء</span></div>${(d.regions||[]).map(r=>`<div class="regionRow"><b>${esc(r.name||r)}</b><span class="userState ${r.active?"on":"off"}">${r.active?"نشط":"معطل"}</span><div class="rowActions"><button class="soft" onclick="regionForm(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">تعديل</button><button class="ghost" onclick="toggleRegion(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">${r.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}`;}catch(e){document.querySelector("#regionTable").innerHTML=errorState(e.message);}
 }
 function regionForm(oldName=""){document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" placeholder="اسم الإقليم"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);}
-async function saveRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify(oldName?{action:"edit",old_name:oldName,name:regionName.value.trim()}:{action:"add",name:regionName.value.trim()})});document.querySelector(".modalShade")?.remove();apiCache.delete("/api/regions");toast("تم حفظ الإقليم");regions();}catch(e){toast(e.message,"err");}}
+async function saveRegion(oldName){try{const input=document.querySelector("#regionName");const name=String(input?.value||"").trim();if(!name)return toast("أدخل اسم الإقليم","err");await api("/api/regions",{method:"POST",body:JSON.stringify(oldName?{action:"edit",old_name:oldName,name}:{action:"add",name})});document.querySelector(".modalShade")?.remove();apiCache.delete("/api/regions");toast("تم حفظ الإقليم وتحديث ارتباطاته");regions();}catch(e){toast(e.message,"err");}}
 async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.delete("/api/regions");toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function archiveRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"delete",old_name:oldName})});document.querySelector(".modalShade")?.remove();apiCache.delete("/api/regions");toast("تمت أرشفة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function auditPage(){
