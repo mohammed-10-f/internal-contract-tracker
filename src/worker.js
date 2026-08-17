@@ -472,7 +472,21 @@ await env.DB.prepare("UPDATE records SET status=?,final_approved_at=NULL,timer_e
   const withinSla=closedDur.length?Math.round(closedDur.filter(x=>x<SLA_HOURS*3600).length/closedDur.length*100):0;
   const returned=Number(row.returned||0),documented=Number(row.documented||0),withdrawn=Number(row.withdrawn||0),stopped=Number(row.stopped||0),delegated=Number(row.delegated||0);
   const quality={documentation_rate:total?Math.round(documented/total*100):0,withdrawal_rate:total?Math.round(withdrawn/total*100):0,rework_rate:total?Math.round(returned/total*100):0,stopped_rate:total?Math.round(stopped/total*100):0,sla_rate:withinSla};
-  return json({manager,filters:{region,from,to},total,required:Number(row.required||0),awaiting:Number(row.awaiting||0),completed,overdue:Number(row.overdue||0),returned,documented,withdrawn,stopped,delegated,receivedByDelegation:delegated,delegatedOut:0,completionRate:total?Math.round(completed/total*100):0,withinSlaRate:withinSla,quality,avg_duration_seconds:avgDuration,avg_duration_label:durationLabel(avgDuration),median_duration_seconds:median,median_duration_label:durationLabel(median),avg_response_seconds:avgResponse,avg_response_label:durationLabel(avgResponse),recent,statusBreakdown,report_date:reportDate()});
+  let comparison=[];
+  if(u.role!=='region'){
+    let cw=' WHERE u.role=\'region\' AND u.active=1',ca=[];
+    if(from){cw+=' AND r.created_at>=?';ca.push(from+' 00:00:00')}
+    if(to){cw+=' AND r.created_at<=?';ca.push(to+' 23:59:59')}
+    comparison=(await env.DB.prepare(`SELECT u.id,u.name,u.region,COUNT(r.id) total,
+      COALESCE(SUM(CASE WHEN r.status='final_documented' THEN 1 ELSE 0 END),0) documented,
+      COALESCE(SUM(CASE WHEN r.status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,
+      COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND r.created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue
+      FROM users u LEFT JOIN records r ON r.region_user_id=u.id${cw} GROUP BY u.id ORDER BY documented DESC,overdue ASC,u.name ASC`).bind(...ca).all()).results.map(x=>{
+        const t=Number(x.total||0), overdueN=Number(x.overdue||0);
+        return {...x,total:t,documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:overdueN,sla_rate:t?Math.max(0,Math.round((t-overdueN)/t*100)):0};
+      });
+  } else { comparison=[{id:manager.id,name:manager.name,region:manager.region,total,documented,withdrawn,overdue:Number(row.overdue||0),sla_rate:withinSla}]; }
+  return json({manager,filters:{region,from,to},total,required:Number(row.required||0),awaiting:Number(row.awaiting||0),completed,overdue:Number(row.overdue||0),returned,documented,withdrawn,stopped,delegated,receivedByDelegation:delegated,delegatedOut:0,completionRate:total?Math.round(completed/total*100):0,withinSlaRate:withinSla,quality,avg_duration_seconds:avgDuration,avg_duration_label:durationLabel(avgDuration),median_duration_seconds:median,median_duration_label:durationLabel(median),avg_response_seconds:avgResponse,avg_response_label:durationLabel(avgResponse),recent,statusBreakdown,comparison,report_date:reportDate()});
  }
  if(p==="/api/users"&&req.method==="GET"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const rows=await env.DB.prepare("SELECT id,username,name,role,region,active,permissions,created_at FROM users ORDER BY id DESC").all();return json({users:rows.results.map(x=>({...x,permissions:permsOf(x)}))})}
  if(p==="/api/users"&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const b=await req.json();if(!b.username||!b.name||!b.password||!b.role)return json({error:"أكمل بيانات المستخدم"},400);const ps=(Array.isArray(b.permissions)?b.permissions:(ROLE_DEFAULTS[b.role]||[])).filter(x=>ALL_PERMS.includes(x));try{await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,region,permissions,active) VALUES(?,?,?,?,?,?,1)").bind(b.username,b.name,await hash(b.password),b.role,b.region||null,ps.join(",")).run()}catch{return json({error:"اسم المستخدم مستخدم مسبقاً"},400)}await log(env,null,u.id,"إنشاء مستخدم",`${b.name} — ${b.role}`);return json({ok:true})}

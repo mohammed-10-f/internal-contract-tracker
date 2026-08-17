@@ -1072,3 +1072,24 @@ select{
     padding-left:76px;
   }
 }
+
+/* 1S final polish — external withdrawal badges + performance comparison */
+.v3-case-status-stack{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;min-width:0}
+.v3-case-status-stack .v3-status{white-space:nowrap}
+.v3-action-badge{font-family:var(--font-mono);font-size:10px!important}
+.impactMetrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding-top:8px}
+.impactMetric{padding:12px 13px;border:1px solid var(--line);border-radius:14px;background:#fbfcfe}
+.impactMetric>div{display:flex;align-items:end;justify-content:space-between;gap:8px}
+.impactMetric span{font-size:10px;color:var(--slate-500);font-weight:700}
+.impactMetric b{font-size:18px;color:var(--ink-900);font-family:var(--font-mono)}
+.impactMetric i{display:block;height:5px;border-radius:99px;background:var(--accent-500);margin-top:10px;opacity:.9}
+.impactMetric i.green{background:var(--success-500)}.impactMetric i.orange{background:var(--warn-500)}.impactMetric i.red{background:var(--danger-500)}.impactMetric i.blue{background:var(--accent-500)}
+.performanceCompare{overflow:auto}
+.performanceCompareHead,.performanceCompareRow{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:10px;align-items:center;min-width:620px}
+.performanceCompareHead{padding:8px 12px;color:var(--slate-500);font-size:10px;font-weight:800;border-bottom:1px solid var(--line)}
+.performanceCompareRow{padding:12px;border-bottom:1px solid #edf1f6;font-size:12px}
+.performanceCompareRow.current{background:#f4f8fd;border-radius:12px}
+.performanceCompareRow strong{display:flex;flex-direction:column;gap:3px}.performanceCompareRow strong small{font-size:9px;color:var(--slate-500);font-weight:600}
+.performanceCompareRow b{text-align:center;font-family:var(--font-mono)}
+.goodText{color:var(--success-700)!important}.warnText{color:var(--warn-700)!important}.dangerText{color:var(--danger-700)!important}
+@media(max-width:760px){.impactMetrics{grid-template-columns:repeat(2,minmax(0,1fr));}.performanceCompareHead,.performanceCompareRow{min-width:560px}.v3-case-status-stack{justify-content:flex-start;align-items:flex-start}.v3-action-badge{font-size:9px!important}}
