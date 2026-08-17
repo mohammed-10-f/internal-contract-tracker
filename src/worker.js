@@ -60,14 +60,6 @@ function isRegionWithdrawn(record){
 function filterRegionRequiredActions(records){
   return (records||[]).filter(isRegionRequiredAction);
 }
-function openRegionExternalAction(record, action){
-  // External action must execute directly; withdrawn is not routed through
-  // the required-actions list and does not open another duplicate card.
-  if(action==='withdrawn') return window.location.assign(`/records/${record.id}?action=withdrawn`);
-  if(action==='respond') return window.location.assign(`/records/${record.id}?action=respond`);
-  if(action==='approve') return window.location.assign(`/records/${record.id}?action=approve`);
-}
-
 /* V18.5 — region manager workspace */
 function regionManagerBucket(status){
   const s=String(status||'').trim().toLowerCase();
