@@ -164,7 +164,7 @@ textarea:focus-visible,[tabindex]:focus-visible{
 .topBrand strong{display:block;font-size:14px;color:#fff;font-weight:800}
 .topBrand small{display:block;color:#7f93b0;font-size:9.5px;margin-top:1px;font-family:var(--font-mono);letter-spacing:.06em;direction:ltr;text-align:right}
 
-.topNav{display:flex;align-items:center;gap:3px;flex:1;justify-content:center;min-width:0;overflow-x:auto;scrollbar-width:none}
+.topNav{display:flex;align-items:center;gap:3px;flex:1;justify-content:center;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .topNav::-webkit-scrollbar{display:none}
 .topNav button{
   position:relative;display:flex;align-items:center;gap:7px;white-space:nowrap;
@@ -667,7 +667,11 @@ select{
 .v4-withdraw-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 /* horizontal workflow stepper */
-.hTimeline{display:flex;align-items:flex-start;overflow-x:auto;padding:20px 6px 12px;scrollbar-width:none}
+.hTimeline{
+  display:flex;align-items:flex-start;overflow-x:auto;padding:20px 6px 12px;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
+  mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
+}
 .hTimeline::-webkit-scrollbar{display:none}
 .hStep{min-width:150px;text-align:center;position:relative}
 .hNode{
@@ -950,13 +954,27 @@ select{
 }
 @media(max-width:800px){
   body{overflow:hidden}
-  .main{height:calc(100vh - 72px);padding:0 15px 100px}
-  .topbar{margin:0 -15px}
-  .topBrand small,.connection span{display:none}
+  .main{height:calc(100vh - 64px);padding:0 13px 100px}
+  .topbar{margin:0 -13px;padding:8px 10px;gap:8px;min-height:64px}
+  .topBrand small{display:none}
+  .topBrand strong{font-size:11.5px;max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .brandMark{width:34px;height:34px;border-radius:10px;font-size:11px}
+  .connection{display:none}
+  .avatarTop{width:34px;height:34px;border-radius:10px}
+  .logoutTop{padding:0 10px;height:34px;font-size:10px}
+  .topActions{gap:6px}
+  .topNav{
+    justify-content:flex-start;gap:2px;
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);
+    mask-image:linear-gradient(to right,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);
+  }
+  .topNav button{height:36px;padding:0 10px;font-size:10.5px;gap:5px}
+  .navIcon{width:17px;height:17px}
+  .navIcon svg{width:16px;height:16px}
   .pageHeader{padding:20px 0 16px}
   .pageHeader h1{font-size:23px}
-  .commandHero{padding:24px 20px;flex-direction:column;align-items:stretch}
-  .heroCopy h2{font-size:23px}
+  .commandHero{padding:22px 18px;flex-direction:column-reverse;align-items:stretch;gap:20px}
+  .heroCopy h2{font-size:22px}
   .heroMetric{width:100%;min-width:0}
   .heroActions{flex-direction:column}
   .heroActions>*{width:100%}
