@@ -417,7 +417,7 @@ async function openRecord(id){
   document.querySelector(".recordModal")?.remove();
   document.body.insertAdjacentHTML("beforeend",`<div class="recordModal"><div class="recordSheet v4-sheet"><button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">× إغلاق</button><div class="loading">جاري تحميل المعاملة…</div></div></div>`);
   try{
-    const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[],stages=d.stages||[];
+    const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[];
     selectedRecord=r;
     const actionNo=r.interruption_transaction_no||"";
     const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status);
@@ -451,12 +451,6 @@ async function openRecord(id){
         </div>
       </section>`;
 
-    const process=`
-      <section class="v4-panel">
-        <div class="v4-panel-head"><div><span class="v4-eyebrow">WORKFLOW</span><h3>مسار المعاملة</h3></div></div>
-        ${horizontalTimeline(r,stages)}
-      </section>`;
-
     const activity=events.length?events.slice().reverse().map((e,n)=>`
       <div class="v4-event">
         <span class="v4-event-dot ${n===0?'current':''}"></span>
@@ -469,8 +463,6 @@ async function openRecord(id){
       <div class="v4-body">
         <main class="v4-main">
           ${overview}
-          ${process}
-          ${r.region_note?`<section class="v4-panel v4-note"><div class="v4-panel-head"><h3>إفادة مسؤول الإقليم</h3></div><p>${esc(r.region_note)}</p></section>`:""}
           <section class="v4-panel v4-action-panel">
             <div class="v4-panel-head"><div><span class="v4-eyebrow">ACTION</span><h3>الإجراء</h3></div></div>
             ${actionHtml}
@@ -543,7 +535,6 @@ function actionsHtml(r){
     h+=`<div class="v4-secondary-action"><span>إسناد المعاملة</span><div id="reassignWrap">جاري تحميل المسؤولين…</div><textarea id="reassignNote" placeholder="سبب الإسناد — اختياري"></textarea><button class="v4-btn primary small" onclick="reassign(${r.id})">إسناد</button></div>`;
   if(can("reactivate_records")&&["stopped","final_documented","final_withdrawn","cancelled"].includes(r.status))
     h+=`<div class="v4-secondary-action"><span>إعادة تنشيط المعاملة</span><button class="v4-btn primary small" onclick="perform(${r.id},'reactivate')">إعادة تنشيط</button></div>`;
-  if(r.requester_note) h+=`<div class="v4-note-inline"><b>ملاحظة الطلب</b><p>${esc(r.requester_note)}</p></div>`;
   return h||`<div class="v4-no-action"><span>✓</span><div><b>لا يوجد إجراء مطلوب</b><small>المعاملة في حالة مستقرة حاليًا.</small></div></div>`;
 }
 async function withdrawForm(id){
@@ -567,8 +558,12 @@ async function perform(id,action,noteId="detailNote"){
 }
 async function reassign(id){
   const sel=document.querySelector("#reassignManager");if(!sel?.value){toast("اختر المسؤول الجديد","err");return;}
-  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"reassign",region_user_id:Number(sel.value),note:document.querySelector("#reassignNote")?.value||""})});toast("تم الإسناد بنجاح");openRecord(id);}
-  catch(e){toast(e.message,"err");}
+  try{
+    await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"reassign",region_user_id:Number(sel.value),note:document.querySelector("#reassignNote")?.value||""})});
+    toast("تم الإسناد بنجاح");
+    closeRecord();
+    await list(VIEW==="required"?"required":VIEW==="closed"?"closed":"");
+  }catch(e){toast(e.message,"err");}
 }
 async function loadReassignManagers(){
   const w=document.querySelector("#reassignWrap");if(!w)return;
@@ -733,7 +728,19 @@ async function regions(){
   try{const d=await api("/api/regions?include_inactive=1");document.querySelector("#regionTable").innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>إجراء</span></div>${(d.regions||[]).map(r=>`<div class="regionRow"><b>${esc(r.name||r)}</b><span class="userState ${r.active?"on":"off"}">${r.active?"نشط":"معطل"}</span><div class="rowActions"><button class="soft" onclick="regionForm(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">تعديل</button><button class="ghost" onclick="toggleRegion(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">${r.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}`;}catch(e){document.querySelector("#regionTable").innerHTML=errorState(e.message);}
 }
 function regionForm(oldName=""){document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" placeholder="اسم الإقليم"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);}
-async function saveRegion(oldName){try{const input=document.querySelector("#regionName");const name=String(input?.value||"").trim();if(!name)return toast("أدخل اسم الإقليم","err");await api("/api/regions",{method:"POST",body:JSON.stringify(oldName?{action:"edit",old_name:oldName,name}:{action:"add",name})});document.querySelector(".modalShade")?.remove();apiCache.clear();toast("تم حفظ الإقليم وتحديث ارتباطاته");regions();}catch(e){toast(e.message,"err");}}
+async function saveRegion(oldName){
+  try{
+    const input=document.querySelector("#regionName");
+    const name=String(input?.value||"").trim();
+    if(!name)return toast("أدخل اسم الإقليم","err");
+    const payload=oldName?{action:"edit",old_name:String(oldName).trim(),name}:{action:"add",name};
+    await api("/api/regions",{method:"POST",body:JSON.stringify(payload)});
+    document.querySelector(".modalShade")?.remove();
+    apiCache.clear();regionsCache=null;
+    toast("تم حفظ الإقليم وتحديث جميع المعاملات المرتبطة به");
+    await regions();
+  }catch(e){toast(e.message,"err");}
+}
 async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.clear();toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function archiveRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"delete",old_name:oldName})});document.querySelector(".modalShade")?.remove();apiCache.clear();toast("تمت أرشفة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function auditPage(){
