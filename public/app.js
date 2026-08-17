@@ -457,7 +457,7 @@ async function openRecord(id){
       </div>`).join(""):`<div class="emptyState">لا يوجد نشاط مسجل</div>`;
 
     let actionHtml=actionsHtml(r);
-    document.querySelector(".recordSheet").innerHTML=`
+    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button>
       ${identity}
       <div class="v4-body">
         <main class="v4-main">
