@@ -348,7 +348,7 @@ function recordCard(r){
   const canRegion=ME?.role==="region" && can("respond_region") && ["waiting_region","returned"].includes(r.status);
   const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["region_documented","region_withdrawn"].includes(r.status);
   const actionNo=r.interruption_transaction_no||"";
-  const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
+  const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status);
   const status=statusLabel[r.status]||r.status||"—";
   const waitingAt=(r.status==="waiting_region"||r.status==="returned")?(r.region_user_name||"مسؤول الإقليم"):"";
   const primary=canRegion
@@ -420,7 +420,7 @@ async function openRecord(id){
     const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[],stages=d.stages||[];
     selectedRecord=r;
     const actionNo=r.interruption_transaction_no||"";
-    const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status)||!!actionNo;
+    const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status);
     const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
 
     const identity=`
@@ -612,11 +612,11 @@ async function statsPage(managerId=""){
   VIEW="stats";navActive("stats");title("تحليلات الأداء","قياس أثر المستخدمين بالوقت والنتائج، بعيداً عن عدد الإقليم.");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
-    const all=ME.role==="admin"?await api("/api/users"):null;
+    const all=await api("/api/stats-users");
     const selected=ME.role==="region"?String(ME.id):String(managerId||"0");
     const [d]=await Promise.all([api(`/api/manager-stats?manager_id=${encodeURIComponent(selected)}&from=${encodeURIComponent(localStorage.getItem("statsFrom")||"")}&to=${encodeURIComponent(localStorage.getItem("statsTo")||"")}`)]);
     const selectableUsers=(all?.users||[]).filter(x=>x.active&&["requester","region"].includes(x.role));
-    const userOptions=all?`<select class="statsUserSelect" onchange="statsPage(this.value)"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`:"";
+    const userOptions=`<select class="statsUserSelect" onchange="statsPage(this.value)" aria-label="اختيار المستخدم"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`;
     const roleText=d.manager.role==="region"?"مسؤول إقليم":d.manager.role==="requester"?"HR":"جميع المستخدمين";
     const compareRows=(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)&&Number(d.manager.id)!==0?'current':''}">
       <strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}${x.region?` · ${esc(x.region)}`:""}</small></strong>
@@ -733,9 +733,9 @@ async function regions(){
   try{const d=await api("/api/regions?include_inactive=1");document.querySelector("#regionTable").innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>إجراء</span></div>${(d.regions||[]).map(r=>`<div class="regionRow"><b>${esc(r.name||r)}</b><span class="userState ${r.active?"on":"off"}">${r.active?"نشط":"معطل"}</span><div class="rowActions"><button class="soft" onclick="regionForm(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">تعديل</button><button class="ghost" onclick="toggleRegion(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">${r.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}`;}catch(e){document.querySelector("#regionTable").innerHTML=errorState(e.message);}
 }
 function regionForm(oldName=""){document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" placeholder="اسم الإقليم"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);}
-async function saveRegion(oldName){try{const input=document.querySelector("#regionName");const name=String(input?.value||"").trim();if(!name)return toast("أدخل اسم الإقليم","err");await api("/api/regions",{method:"POST",body:JSON.stringify(oldName?{action:"edit",old_name:oldName,name}:{action:"add",name})});document.querySelector(".modalShade")?.remove();apiCache.delete("/api/regions");toast("تم حفظ الإقليم وتحديث ارتباطاته");regions();}catch(e){toast(e.message,"err");}}
-async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.delete("/api/regions");toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
-async function archiveRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"delete",old_name:oldName})});document.querySelector(".modalShade")?.remove();apiCache.delete("/api/regions");toast("تمت أرشفة الإقليم");regions();}catch(e){toast(e.message,"err");}}
+async function saveRegion(oldName){try{const input=document.querySelector("#regionName");const name=String(input?.value||"").trim();if(!name)return toast("أدخل اسم الإقليم","err");await api("/api/regions",{method:"POST",body:JSON.stringify(oldName?{action:"edit",old_name:oldName,name}:{action:"add",name})});document.querySelector(".modalShade")?.remove();apiCache.clear();toast("تم حفظ الإقليم وتحديث ارتباطاته");regions();}catch(e){toast(e.message,"err");}}
+async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.clear();toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
+async function archiveRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"delete",old_name:oldName})});document.querySelector(".modalShade")?.remove();apiCache.clear();toast("تمت أرشفة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function auditPage(){
   if(!can("view_audit_log")){toast("لا تملك صلاحية سجل النشاط","err");return}
   VIEW="audit";navActive("audit");title("سجل النشاط","سجل تدقيق كامل قابل للبحث والتصفية والتصدير.");
