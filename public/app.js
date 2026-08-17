@@ -457,7 +457,7 @@ async function openRecord(id){
       </div>`).join(""):`<div class="emptyState">لا يوجد نشاط مسجل</div>`;
 
     let actionHtml=actionsHtml(r);
-    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button>
+    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button>
       ${identity}
       <div class="v4-body">
         <main class="v4-main">
@@ -479,7 +479,7 @@ async function openRecord(id){
     startLiveTimers();
   }catch(e){
     const msg=String(e?.message||"تعذر تحميل المعاملة");
-    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose" onclick="closeRecord()">×</button><div class="cw-error"><b>تعذر تحميل المعاملة</b><span>${esc(msg)}</span><button onclick="closeRecord()">إغلاق</button></div>`;
+    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button><div class="cw-error"><b>تعذر تحميل المعاملة</b><span>${esc(msg)}</span><button onclick="closeRecord()">إغلاق</button></div>`;
   }
 }
 function finishedStatusClass(status){

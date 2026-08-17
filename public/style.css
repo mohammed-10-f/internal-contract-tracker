@@ -1022,5 +1022,53 @@ select{
   .userModal,.smallModal{padding:20px}
 }
 
-/* 1S.5 close-button-only patch */
-.modalClose.v4-close{min-width:38px;padding:0 10px;white-space:nowrap;cursor:pointer}
+/* 1S.5.2 — responsive close button only */
+.recordSheet > .modalClose.v4-close{
+  position:absolute;
+  top:16px;
+  right:16px;
+  left:auto;
+  width:40px;
+  height:40px;
+  min-width:40px;
+  padding:0;
+  border-radius:12px;
+  background:rgba(255,255,255,.96);
+  border:1px solid var(--line);
+  color:var(--ink-700);
+  font-size:22px;
+  font-weight:500;
+  line-height:1;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  box-shadow:0 8px 22px rgba(4,10,22,.10);
+  transition:transform .14s var(--ease),background .14s var(--ease),box-shadow .14s var(--ease);
+}
+.recordSheet > .modalClose.v4-close:hover{
+  background:#fff;
+  transform:translateY(-1px);
+  box-shadow:0 10px 26px rgba(4,10,22,.15);
+}
+.recordSheet > .modalClose.v4-close:active{transform:translateY(0)}
+
+@media(max-width:800px){
+  .recordSheet > .modalClose.v4-close{
+    top:10px;
+    right:10px;
+    width:38px;
+    height:38px;
+    min-width:38px;
+    border-radius:11px;
+    font-size:21px;
+  }
+  .recordSheet .v4-identity{
+    padding-top:58px;
+  }
+}
+
+@media(min-width:801px){
+  .recordSheet .v4-identity{
+    padding-left:76px;
+  }
+}
