@@ -86,7 +86,7 @@ function buildRegionManagerBuckets(records){
   return out;
 }
 
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=21;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=22;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
@@ -285,7 +285,7 @@ function roleFilterRequired(u){return u.role==="region"?"r.status IN ('waiting_r
 export default {async fetch(req,env){
  await ensureSchema(env); const url=new URL(req.url),p=url.pathname; const u=await user(req,env);
  if(p==="/api/me")return json({user:u?{id:u.id,name:u.name,username:u.username,role:u.role,region:u.region,permissions:permsOf(u)}:null});
- if(p==="/api/health"&&req.method==="GET"){try{const v=await env.DB.prepare("SELECT value FROM schema_meta WHERE key='version'").first();const r=await env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) active FROM regions").first();return json({ok:true,version:Number(v?.value||0),regions:{total:Number(r?.c||0),active:Number(r?.active||0)},user:u?{id:u.id,role:u.role,permissions:permsOf(u)}:null});}catch(e){return json({ok:false,error:String(e?.message||e)},500)}}
+ if(p==="/api/health"&&req.method==="GET"){try{const v=await env.DB.prepare("SELECT value FROM schema_meta WHERE key='version'").first();const r=await env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) active FROM regions").first();const cols=await env.DB.prepare("PRAGMA table_info(regions)").all();return json({ok:true,version:Number(v?.value||0),regions:{total:Number(r?.c||0),active:Number(r?.active||0)},region_columns:(cols.results||[]).map(x=>x.name),user:u?{id:u.id,role:u.role,permissions:permsOf(u)}:null});}catch(e){return json({ok:false,error:String(e?.message||e)},500)}}
  if(p==="/api/setup"&&req.method==="POST"){const c=await env.DB.prepare("SELECT COUNT(*) c FROM users").first();if(Number(c.c))return json({error:"تمت التهيئة مسبقاً"},400);const b=await req.json(),h=await hash(String(b.password||"1234"));await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES('admin',?,?, 'admin',?,1)").bind(b.name||"المدير",h,ALL_PERMS.join(",")).run();return json({ok:true})}
  if(p==="/api/login"&&req.method==="POST"){const b=await req.json(),username=String(b.username||"").trim(),x=await env.DB.prepare("SELECT * FROM users WHERE username=? AND active=1").bind(username).first();if(!x||x.password_hash!==await hash(String(b.password||""))){await log(env,null,null,"محاولة دخول فاشلة",`اسم المستخدم: ${username}`);return json({error:"بيانات الدخول غير صحيحة"},401)}const t=token(),exp=Math.floor(Date.now()/1000)+DAYS*86400;await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at,login_at,last_seen_at,ip,user_agent) VALUES(?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)").bind(t,x.id,exp,clientIp(req),req.headers.get("User-Agent")||"—").run();await log(env,null,x.id,"تسجيل دخول",`IP: ${clientIp(req)}`);return json({ok:true},200,{"set-cookie":`${COOKIE}=${t}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${DAYS*86400}`})}
  if(p==="/api/logout"){const t=cookie(req);if(t){const s=await env.DB.prepare("SELECT user_id FROM sessions WHERE token=?").bind(t).first();if(s)await log(env,null,s.user_id,"تسجيل خروج",`IP: ${clientIp(req)}`);await env.DB.prepare("UPDATE sessions SET logout_at=CURRENT_TIMESTAMP,last_seen_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run();await env.DB.prepare("DELETE FROM sessions WHERE token=?").bind(t).run()}return json({ok:true},200,{"set-cookie":`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`})}
@@ -361,18 +361,20 @@ export default {async fetch(req,env){
   const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();
   if(action==="add"){
     if(!name)return json({error:"أدخل اسم الإقليم"},400);
-    const existing=await env.DB.prepare("SELECT name,active FROM regions WHERE name=? COLLATE NOCASE LIMIT 1").bind(name).first();
+    const existing=await env.DB.prepare("SELECT name,active FROM regions WHERE LOWER(TRIM(name))=LOWER(TRIM(?)) LIMIT 1").bind(name).first();
     if(existing){
       if(Number(existing.active)===1)return json({error:"الإقليم موجود مسبقاً وهو نشط"},400);
-      await env.DB.prepare("UPDATE regions SET active=1,archived_at=NULL,archived_by=NULL WHERE name=?").bind(name).run();
+      await env.DB.prepare("UPDATE regions SET active=1,archived_at=NULL,archived_by=NULL WHERE LOWER(TRIM(name))=LOWER(TRIM(?))").bind(name).run();
       await log(env,null,u.id,"إعادة تفعيل إقليم من شاشة الإضافة",name);
       return json({ok:true,reactivated:true});
     }
     try{
-      await env.DB.prepare("INSERT INTO regions(name,active,archived_at,archived_by) VALUES(?,1,NULL,NULL)").bind(name).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO regions(name,active,archived_at,archived_by) VALUES(?,1,NULL,NULL)").bind(name).run();
+      const created=await env.DB.prepare("SELECT name,active FROM regions WHERE LOWER(TRIM(name))=LOWER(TRIM(?)) LIMIT 1").bind(name).first();
+      if(!created)return json({error:"تعذر حفظ الإقليم في قاعدة البيانات. تحقق من اتصال D1 وبنية جدول regions."},500);
+      if(Number(created.active)!==1)return json({error:"تعذر تفعيل الإقليم الجديد."},500);
     }catch(e){
       const msg=String(e?.message||e||"");
-      if(/unique|constraint/i.test(msg)) return json({error:"اسم الإقليم مستخدم مسبقاً"},409);
       return json({error:`تعذر إضافة الإقليم: ${msg||"خطأ غير معروف"}`},500);
     }
     dashboardCache.clear();
@@ -385,7 +387,7 @@ export default {async fetch(req,env){
   if(action==="edit"){
     if(!name)return json({error:"أدخل اسم الإقليم الجديد"},400);
     if(name===oldName)return json({ok:true});
-    if(await env.DB.prepare("SELECT 1 FROM regions WHERE name=? COLLATE NOCASE LIMIT 1").bind(name).first())return json({error:"اسم الإقليم مستخدم مسبقاً"},400);
+    if(await env.DB.prepare("SELECT 1 FROM regions WHERE LOWER(TRIM(name))=LOWER(TRIM(?)) LIMIT 1").bind(name).first())return json({error:"اسم الإقليم مستخدم مسبقاً"},400);
     try{
       await env.DB.prepare("UPDATE users SET region=? WHERE region=?").bind(name,oldName).run();
       await env.DB.prepare("UPDATE records SET region=?,updated_at=CURRENT_TIMESTAMP WHERE region=?").bind(name,oldName).run();
@@ -596,7 +598,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
     AVG(CASE WHEN final_approved_at IS NOT NULL THEN (julianday(final_approved_at)-julianday(created_at))*86400 END) avg_duration,
     AVG(CASE WHEN region_responded_at IS NOT NULL THEN (julianday(region_responded_at)-julianday(created_at))*86400 END) avg_response,
     AVG(CASE WHEN final_approved_at IS NOT NULL AND (julianday(final_approved_at)-julianday(created_at))*86400 > ? THEN ((julianday(final_approved_at)-julianday(created_at))*86400-?) END) avg_delay
-    FROM records${where}`).bind(SLA_HOURS*3600,SLA_HOURS*3600,SLA_HOURS*3600,...args);
+    FROM records${where}`).bind(SLA_HOURS*3600,SLA_HOURS*3600,SLA_HOURS*3600,SLA_HOURS*3600,...args);
 
   const recentStmt=env.DB.prepare(`SELECT substr(created_at,1,7) month,COUNT(*) count FROM records${where} GROUP BY substr(created_at,1,7) ORDER BY month DESC LIMIT 12`).bind(...args);
   const statusStmt=env.DB.prepare(`SELECT status key,COUNT(*) value FROM records${where} GROUP BY status`).bind(...args);

@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[], regionsCache=null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="19.2.0";
+const APP_VERSION="19.3.0";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -167,8 +167,11 @@ async function api(url, opts={}) {
   if(cacheable){const c=apiCache.get(url);if(c&&Date.now()-c.at<30000)return c.data;}
   const requestUrl=opts.cacheBust?`${url}${url.includes("?")?"&":"?"}_=${opts.cacheBust}`:url;
   const r=await fetch(requestUrl,{...opts,headers:{"content-type":"application/json",...(opts.headers||{})}});
-  let data={}; try{data=await r.json()}catch{}
-  if(!r.ok){const err=Error(data.error||"تعذر تنفيذ العملية");err.status=r.status;err.data=data;throw err;}
+  let data={};
+  const contentType=r.headers.get("content-type")||"";
+  if(contentType.includes("application/json")){ try{data=await r.json()}catch{} }
+  else { const text=await r.text().catch(()=>""); if(text)data={error:text.slice(0,500)}; }
+  if(!r.ok){const err=Error(data.error||`تعذر تنفيذ العملية (${r.status})`);err.status=r.status;err.data=data;err.url=requestUrl;throw err;}
   if(cacheable){apiCache.set(url,{at:Date.now(),data});regionsCache=data;}
   return data;
 }
@@ -631,7 +634,7 @@ async function statsPage(managerId=""){
   try{
     const selected=ME.role==="region"?String(ME.id):String(managerId||"0");
     const qs=new URLSearchParams({manager_id:selected,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});
-    const [all,d]=await Promise.all([api("/api/stats-users?"+Date.now()),api(`/api/manager-stats?${qs.toString()}`)]);
+    const [all,d]=await Promise.all([api("/api/stats-users?_="+Date.now()),api(`/api/manager-stats?${qs.toString()}`)]);
     if(!d||!d.manager)throw Error("تعذر تجهيز بيانات تحليل الأداء. حاول تحديث الصفحة أو التحقق من صلاحية تحليل الأداء.");
     const selectableUsers=(all?.users||[]).filter(x=>x.active&&["requester","region"].includes(x.role));
     const userOptions=`<select class="statsUserSelect" onchange="statsPage(this.value)" aria-label="اختيار المستخدم"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`;
@@ -674,7 +677,10 @@ async function statsPage(managerId=""){
       </div></section>
       <section class="chartCard"><div class="chartHead"><h3>المعاملات حسب الشهر</h3><span>آخر 12 شهر</span></div>${bars(d.recent)}</section>
     </section>`;
-  }catch(e){v.innerHTML=errorState(e.message,"statsPage");}
+  }catch(e){
+    const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;
+    v.innerHTML=errorState(detail,"statsPage");
+  }
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
@@ -769,7 +775,7 @@ async function loadRegionsTab(tab="active"){
     }).join("");
     const empty=tab==='active'?'لا توجد أقاليم نشطة. أضف إقليماً جديداً للبدء.':'لا توجد أقاليم مؤرشفة.';
     table.innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>آخر تحديث</span><span>إجراء</span></div>${rowHtml||`<div class="emptyRow">${empty}</div>`}`;
-  }catch(e){table.innerHTML=errorState(e.message);}
+  }catch(e){table.innerHTML=errorState(e?.status?`${e.message} · HTTP ${e.status}`:e.message);}
 }
 async function reactivateRegion(name){
   try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:name})});apiCache.clear();regionsCache=null;toast("تمت إعادة تفعيل الإقليم");await loadRegionsTab("archived");}
@@ -787,7 +793,7 @@ async function saveRegion(oldName){
     apiCache.clear();regionsCache=null;
     toast("تم حفظ الإقليم وتحديث جميع المعاملات المرتبطة به");
     await regions();
-  }catch(e){toast(e.message,"err");}
+  }catch(e){toast(e?.status?`${e.message} · HTTP ${e.status}`:e.message,"err");}
 }
 async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.clear();toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
 async function archiveRegion(oldName){
