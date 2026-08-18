@@ -628,9 +628,10 @@ async function statsPage(managerId=""){
   VIEW="stats";navActive("stats");title("تحليلات الأداء","قياس أثر المستخدمين بالوقت والنتائج، بعيداً عن عدد الإقليم.");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
-    const all=await api("/api/stats-users");
     const selected=ME.role==="region"?String(ME.id):String(managerId||"0");
-    const [d]=await Promise.all([api(`/api/manager-stats?manager_id=${encodeURIComponent(selected)}&from=${encodeURIComponent(localStorage.getItem("statsFrom")||"")}&to=${encodeURIComponent(localStorage.getItem("statsTo")||"")}`)]);
+    const qs=new URLSearchParams({manager_id:selected,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});
+    const [all,d]=await Promise.all([api("/api/stats-users?"+Date.now()),api(`/api/manager-stats?${qs.toString()}`)]);
+    if(!d||!d.manager)throw Error("تعذر تجهيز بيانات تحليل الأداء. حاول تحديث الصفحة أو التحقق من صلاحية تحليل الأداء.");
     const selectableUsers=(all?.users||[]).filter(x=>x.active&&["requester","region"].includes(x.role));
     const userOptions=`<select class="statsUserSelect" onchange="statsPage(this.value)" aria-label="اختيار المستخدم"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`;
     const roleText=d.manager.role==="region"?"مسؤول إقليم":d.manager.role==="requester"?"HR":"جميع المستخدمين";
@@ -745,9 +746,32 @@ async function createDelegation(){
 async function revokeDelegation(id){try{await api(`/api/delegations/${id}`,{method:"POST",body:JSON.stringify({action:"revoke"})});toast("تم إلغاء التفويض");users();}catch(e){toast(e.message,"err");}}
 async function regions(){
   if(!can("manage_regions")){toast("لا تملك صلاحية إدارة الأقاليم","err");return}
-  VIEW="regions";navActive("regions");title("الأقاليم","إدارة الأقاليم وحالة التفعيل من مكان واحد.");
-  const v=document.querySelector("#view");v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">REGION DIRECTORY</span><h2>دليل الأقاليم</h2></div><button class="primary" onclick="regionForm()">＋ إضافة إقليم</button></div><div id="regionTable" class="regionTable"><div class="loading">جاري التحميل…</div></div></section>`;
-  try{const d=await api("/api/regions");document.querySelector("#regionTable").innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>إجراء</span></div>${(d.regions||[]).map(r=>`<div class="regionRow"><b>${esc(r.name||r)}</b><span class="userState on">نشط</span><div class="rowActions"><button class="soft" onclick="regionForm(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">تعديل</button><button class="danger" onclick="archiveRegion(decodeURIComponent('${encodeURIComponent(r.name||r)}'))">أرشفة</button></div></div>`).join("")}`;}catch(e){document.querySelector("#regionTable").innerHTML=errorState(e.message);}
+  VIEW="regions";navActive("regions");title("الأقاليم","إدارة دورة حياة الأقاليم: نشط، مؤرشف، وإعادة تفعيل من نفس الشاشة.");
+  const v=document.querySelector("#view");
+  v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">REGION DIRECTORY</span><h2>دليل الأقاليم</h2><p class="sectionHint">الأرشفة لا تحذف الإقليم ولا سجله؛ يمكنك إعادة تفعيله من تبويب الأرشيف في أي وقت.</p></div><button class="primary" onclick="regionForm()">＋ إضافة إقليم</button></div><div class="regionTabs"><button class="regionTab active" data-region-tab="active" onclick="loadRegionsTab('active')">الأقاليم النشطة</button><button class="regionTab" data-region-tab="archived" onclick="loadRegionsTab('archived')">الأرشيف</button></div><div id="regionTable" class="regionTable"><div class="loading">جاري التحميل…</div></div></section>`;
+  await loadRegionsTab("active");
+}
+async function loadRegionsTab(tab="active"){
+  const table=document.querySelector("#regionTable");if(!table)return;
+  document.querySelectorAll(".regionTab").forEach(x=>x.classList.toggle("active",x.dataset.regionTab===tab));
+  table.innerHTML='<div class="loading">جاري تحميل الأقاليم…</div>';
+  try{
+    const d=await api(`/api/regions?include_inactive=1&_=${Date.now()}`);
+    const rows=(d.regions||[]).filter(r=>tab==="active"?Number(r.active)===1:Number(r.active)!==1);
+    const rowHtml=rows.map(r=>{
+      const n=esc(r.name), enc=encodeURIComponent(r.name||""), active=Number(r.active)===1;
+      const actions=active
+        ? `<button class="soft" onclick="regionForm(decodeURIComponent('${enc}'))">تعديل</button><button class="danger" onclick="archiveRegion(decodeURIComponent('${enc}'))">أرشفة</button>`
+        : `<button class="primary" onclick="reactivateRegion(decodeURIComponent('${enc}'))">إعادة تفعيل</button><button class="soft" onclick="regionForm(decodeURIComponent('${enc}'))">تعديل الاسم</button>`;
+      return `<div class="regionRow"><b>${n}</b><span class="userState ${active?'on':'off'}">${active?'نشط':'مؤرشف'}</span><small>${active?'—':esc(fmtDateTime(r.archived_at)||'—')}</small><div class="rowActions">${actions}</div></div>`;
+    }).join("");
+    const empty=tab==='active'?'لا توجد أقاليم نشطة. أضف إقليماً جديداً للبدء.':'لا توجد أقاليم مؤرشفة.';
+    table.innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>آخر تحديث</span><span>إجراء</span></div>${rowHtml||`<div class="emptyRow">${empty}</div>`}`;
+  }catch(e){table.innerHTML=errorState(e.message);}
+}
+async function reactivateRegion(name){
+  try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:name})});apiCache.clear();regionsCache=null;toast("تمت إعادة تفعيل الإقليم");await loadRegionsTab("archived");}
+  catch(e){toast(e.message,"err");}
 }
 function regionForm(oldName=""){document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" placeholder="اسم الإقليم"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);}
 async function saveRegion(oldName){

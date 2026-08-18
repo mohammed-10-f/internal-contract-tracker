@@ -86,7 +86,7 @@ function buildRegionManagerBuckets(records){
   return out;
 }
 
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=17;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=19;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
@@ -150,7 +150,9 @@ async function ensureSchema(env){
     ["sessions","login_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","last_seen_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","logout_at","TEXT"],["sessions","ip","TEXT"],["sessions","user_agent","TEXT"]
    ];
    for(const [table,col,type] of adds){try{await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run()}catch{}}
-   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS regions(name TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS regions(name TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,archived_at TEXT,archived_by INTEGER)`).run();
+   try{await env.DB.prepare("ALTER TABLE regions ADD COLUMN archived_at TEXT").run()}catch{}
+   try{await env.DB.prepare("ALTER TABLE regions ADD COLUMN archived_by INTEGER").run()}catch{}
    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL,login_at TEXT DEFAULT CURRENT_TIMESTAMP,last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,logout_at TEXT,ip TEXT,user_agent TEXT)`).run();
    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS delegations_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,source_user_id INTEGER NOT NULL,target_user_id INTEGER NOT NULL,starts_at TEXT,ends_at TEXT,active INTEGER NOT NULL DEFAULT 1,created_by INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,revoked_at TEXT,revoked_by INTEGER,note TEXT DEFAULT '')`).run();
    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS record_stages(id INTEGER PRIMARY KEY AUTOINCREMENT,record_id INTEGER NOT NULL,stage TEXT NOT NULL,user_id INTEGER,started_at TEXT NOT NULL,ended_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -310,13 +312,24 @@ export default {async fetch(req,env){
   const countSql=sql; const countArgs=a.slice(); sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset); const [countRow,rows]=await env.DB.batch([env.DB.prepare(`SELECT COUNT(*) c FROM (${countSql})`).bind(...countArgs),env.DB.prepare(sql).bind(...a)]); let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit,total_count:Number(countRow.results?.[0]?.c||0)})
  }
  if(p==="/api/managers"&&req.method==="GET"){if(!allow(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
- if(p==="/api/regions"&&req.method==="GET"){const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");const rows=await env.DB.prepare(`SELECT name,active,created_at FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name`).all();return json({regions:rows.results})}
+ if(p==="/api/regions"&&req.method==="GET"){
+  const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");
+  const rows=await env.DB.prepare(`SELECT name,active,created_at,archived_at,archived_by FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name COLLATE NOCASE`).all();
+  return json({regions:rows.results,active_count:rows.results.filter(x=>Number(x.active)===1).length,archived_count:rows.results.filter(x=>Number(x.active)!==1).length});
+ }
  if(p==="/api/regions"&&req.method==="POST"){
   if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);
   const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();
   if(action==="add"){
     if(!name)return json({error:"أدخل اسم الإقليم"},400);
-    try{await env.DB.prepare("INSERT INTO regions(name,active) VALUES(?,1)").bind(name).run()}catch{return json({error:"الإقليم موجود مسبقاً"},400)}
+    const existing=await env.DB.prepare("SELECT name,active FROM regions WHERE name=?").bind(name).first();
+    if(existing){
+      if(Number(existing.active)===1)return json({error:"الإقليم موجود مسبقاً وهو نشط"},400);
+      await env.DB.prepare("UPDATE regions SET active=1,archived_at=NULL,archived_by=NULL WHERE name=?").bind(name).run();
+      await log(env,null,u.id,"إعادة تفعيل إقليم من شاشة الإضافة",name);
+      return json({ok:true,reactivated:true});
+    }
+    try{await env.DB.prepare("INSERT INTO regions(name,active,archived_at,archived_by) VALUES(?,1,NULL,NULL)").bind(name).run()}catch(e){return json({error:`تعذر إضافة الإقليم: ${e?.message||"خطأ غير معروف"}`},400)}
     await log(env,null,u.id,"إضافة إقليم",name);return json({ok:true});
   }
   const oldName=String(b.old_name||"").trim();if(!oldName)return json({error:"الإقليم غير محدد"},400);
@@ -354,7 +367,7 @@ export default {async fetch(req,env){
         await log(env,rec.id,u.id,"أرشفة الإقليم ونقل المعاملة",`${oldName} → ${replacement} — أُسندت إلى ${targetManager.name}`);
       }
     }
-    await env.DB.prepare("UPDATE regions SET active=0 WHERE name=?").bind(oldName).run();
+    await env.DB.prepare("UPDATE regions SET active=0,archived_at=CURRENT_TIMESTAMP,archived_by=? WHERE name=?").bind(u.id,oldName).run();
     dashboardCache.clear();
     await log(env,null,u.id,"أرشفة إقليم",`${oldName}${count?` — نقل ${count} معاملة نشطة إلى ${String(b.replacement_region).trim()}`:""}`);
     return json({ok:true,moved:count});
@@ -364,9 +377,14 @@ export default {async fetch(req,env){
     if(!current)return json({error:"الإقليم غير موجود"},404);
     if(Number(current.active)===1){
       if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"انقل أو عطّل مسؤول الإقليم أولاً قبل تعطيل الإقليم"},400);
+      await env.DB.prepare("UPDATE regions SET active=0,archived_at=CURRENT_TIMESTAMP,archived_by=? WHERE name=?").bind(u.id,oldName).run();
+    }else{
+      const activeUser=await env.DB.prepare("SELECT id,name FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first();
+      if(activeUser)return json({error:`لا يمكن إعادة التفعيل: الإقليم مرتبط حالياً بالمسؤول ${activeUser.name}`},400);
+      await env.DB.prepare("UPDATE regions SET active=1,archived_at=NULL,archived_by=NULL WHERE name=?").bind(oldName).run();
     }
-    await env.DB.prepare("UPDATE regions SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE name=?").bind(oldName).run();
-    await log(env,null,u.id,"تغيير حالة إقليم",oldName);return json({ok:true});
+    dashboardCache.clear();
+    await log(env,null,u.id,Number(current.active)===1?"أرشفة إقليم":"إعادة تفعيل إقليم",oldName);return json({ok:true,active:Number(current.active)===1?0:1});
   }
   return json({error:"إجراء غير معروف"},400);
  }

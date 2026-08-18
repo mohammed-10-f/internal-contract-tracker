@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_records_requester_status ON records(requester_id,
 CREATE INDEX IF NOT EXISTS idx_records_delegated_status ON records(delegated_to_user_id,status);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 
-CREATE TABLE IF NOT EXISTS regions (name TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS regions (name TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TEXT, archived_by INTEGER);
 
 
 CREATE TABLE IF NOT EXISTS record_stages (
