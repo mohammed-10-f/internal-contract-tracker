@@ -415,9 +415,9 @@ select{
 .statCard em{font-style:normal;color:var(--slate-400);font-size:9.5px}
 
 /* ============================================================
-   6. نبض الإقليم وأداء المسؤولين — Region pulse / Manager grid
+   6. نبض المسؤول وأداء المستخدمين
    ============================================================ */
-.regionPulse{
+.responsiblePulse{
   background:#fff;border:1px solid var(--line);border-radius:var(--r-xl);
   display:grid;grid-template-columns:1.2fr 1fr;gap:22px;padding:24px;box-shadow:var(--sh-sm);
 }
@@ -462,7 +462,7 @@ select{
 /* ============================================================
    7. سجل النشاط في الرئيسية — Activity panel
    ============================================================ */
-.activityTable,.usersTable,.regionTable,.auditTable{
+.activityTable,.usersTable,.auditTable{
   background:#fff;border:1px solid var(--line);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--sh-sm);
 }
 .activityHeader,.activityRow{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr;gap:14px;align-items:center;padding:13px 18px}
@@ -487,13 +487,13 @@ select{
 .filterBar>input{align-self:center}
 .filterBar button{align-self:center}
 
-.regionWorkspace{
+.responsibleWorkspace{
   background:linear-gradient(135deg,var(--ink-900),var(--ink-800));border-radius:var(--r-xl);
   padding:20px 22px;margin-bottom:16px;color:#fff;box-shadow:var(--sh-md);
 }
-.regionWorkspaceIntro{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
-.regionWorkspaceIntro strong{font-size:16px}
-.regionWorkspaceIntro small{color:#a9bcd6;font-size:10.5px}
+.responsibleWorkspaceIntro{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.responsibleWorkspaceIntro strong{font-size:16px}
+.responsibleWorkspaceIntro small{color:#a9bcd6;font-size:10.5px}
 .inboxTabs{display:flex;gap:7px;flex-wrap:wrap}
 .inboxTabs button{
   display:flex;align-items:center;gap:8px;height:42px;padding:0 15px;border-radius:11px;
@@ -529,7 +529,7 @@ select{
 .v3-case-identity strong{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .v3-case-identity small{display:block;color:var(--slate-400);font-size:10px;margin-top:2px;font-family:var(--font-mono);direction:ltr;text-align:right}
 .v3-label{display:block;color:var(--slate-400);font-size:9px;margin-bottom:3px;font-weight:600}
-.v3-case-type b,.v3-case-region b,.v3-case-assignee b{font-size:11px;color:var(--ink-800)}
+.v3-case-type b,.v3-case-responsible b,.v3-case-assignee b{font-size:11px;color:var(--ink-800)}
 .v3-status{display:inline-flex;padding:6px 10px;border-radius:99px;font-size:9.5px;font-weight:700;white-space:nowrap}
 .v3-status.is-done{background:var(--success-100);color:var(--success-700)}
 .v3-status.is-danger{background:var(--danger-100);color:var(--danger-700)}
@@ -775,7 +775,7 @@ select{
 .chartEmpty{text-align:center;padding:60px 0;color:var(--slate-400);font-size:11px}
 
 /* ============================================================
-   12. المستخدمون والأقاليم وسجل النشاط — Admin tables
+   12. المستخدمون وسجل النشاط — Admin tables
    ============================================================ */
 .usersTable{font-size:11px}
 .usersHead,.userRow{display:grid;grid-template-columns:2fr 1fr 1fr .8fr .9fr 1.6fr;gap:11px;align-items:center;padding:13px 17px}
@@ -798,9 +798,6 @@ select{
 .rowActions{display:flex;gap:6px;flex-wrap:wrap}
 .rowActions button{flex:1;padding:8px 10px;font-size:9.5px;min-width:max-content;height:auto}
 
-.regionHead,.regionRow{display:grid;grid-template-columns:2fr 1fr 1fr;align-items:center;padding:13px 17px;gap:11px}
-.regionHead{background:var(--slate-50);color:var(--slate-500);font-size:9.5px;font-weight:700;text-transform:uppercase}
-.regionRow{border-top:1px solid var(--line-soft);font-size:11.5px}
 
 .auditFilters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:9px;margin-bottom:14px}
 .auditHead,.auditRow{display:grid;grid-template-columns:1.1fr 1fr 1.5fr .8fr 2.2fr;gap:11px;padding:12px 16px;align-items:center}
@@ -984,7 +981,7 @@ select{
   .statCard strong{font-size:19px}
   .sectionHead{align-items:flex-start}
   .sectionHead h2{font-size:17px}
-  .managerGrid,.recordGrid,.formGrid,.regionPulse,.v4-overview-grid,.permGrid,.analysisGrid,.delegationCreate,.intakeForm{grid-template-columns:1fr}
+  .managerGrid,.recordGrid,.formGrid,.responsiblePulse,.v4-overview-grid,.permGrid,.analysisGrid,.delegationCreate,.intakeForm{grid-template-columns:1fr}
   .filterBar{grid-template-columns:1fr 1fr;gap:8px;padding:11px}
   .filterBar>input:first-child{grid-column:1/-1}
   .filterBar>button{grid-column:1/-1}
@@ -1003,7 +1000,7 @@ select{
   .analysisToolbar{flex-direction:column;align-items:stretch}
   .analysisToolbar select{width:100%}
   .pulseList{grid-template-columns:1fr 1fr}
-  .regionPulse{padding:18px}
+  .responsiblePulse{padding:18px}
   .inboxTabs{width:100%}
   .inboxTabs button{flex:1;justify-content:center}
   .qaField{border-right:0;padding:0}
@@ -1016,7 +1013,7 @@ select{
   .v4-withdraw-fields{grid-template-columns:1fr}
   .v4-panel{padding:15px}
   .v3-case-row{grid-template-columns:1fr 1fr}
-  .v3-case-type,.v3-case-region,.v3-case-assignee{background:var(--slate-50);padding:9px;border-radius:10px}
+  .v3-case-type,.v3-case-responsible,.v3-case-assignee{background:var(--slate-50);padding:9px;border-radius:10px}
   .v3-case-action{display:grid;grid-template-columns:1fr 40px}
   .withdrawal-1s__grid{grid-template-columns:1fr}
   .userModal,.smallModal{padding:20px}
@@ -1109,7 +1106,7 @@ select{
 @media(max-width:760px){
   .v3-case-status-stack{justify-content:flex-start;flex-wrap:wrap;gap:5px}
   .v3-case-row{grid-template-columns:1fr auto!important}
-  .v3-case-type,.v3-case-region,.v3-case-assignee{min-width:0}
+  .v3-case-type,.v3-case-responsible,.v3-case-assignee{min-width:0}
   .statsUserSelect{width:100%;max-width:none;min-width:0}
 }
 
@@ -1143,12 +1140,3 @@ select{
 .v4-reactivate-fields label span{display:block;font-size:9px;font-weight:700;color:var(--slate-600);margin-bottom:5px}
 .v4-reactivate-fields input,.v4-reactivate-fields select{width:100%;background:#fff}
 @media(max-width:760px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(5,minmax(82px,1fr));min-width:700px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
-
-/* V19 — region lifecycle workspace */
-.regionTabs{display:flex;gap:8px;margin:0 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}
-.regionTab{border:0;background:transparent;padding:9px 14px;border-radius:9px;color:var(--slate-500);font-weight:700;cursor:pointer}
-.regionTab.active{background:var(--slate-50);color:var(--ink-800);box-shadow:inset 0 -2px 0 currentColor}
-.sectionHint{margin:5px 0 0;color:var(--slate-500);font-size:11px}
-.regionHead,.regionRow{grid-template-columns:2fr 1fr 1.2fr 1.5fr}
-.regionRow small{color:var(--slate-500);font-size:10px}
-@media(max-width:760px){.regionHead,.regionRow{grid-template-columns:1.5fr 1fr 1fr;}.regionHead span:nth-child(3),.regionRow small{display:none}.regionRow .rowActions{grid-column:1/-1;justify-content:flex-start}}

@@ -3,17 +3,17 @@
 function canViewCase1S(user, record){
   const role=String(user?.role||user?.user_role||'').toLowerCase();
   if(['admin','manager','supervisor','viewer'].includes(role)) return true;
-  if(role==='region'){
+  if(role==='responsible'){
     const me=String(user?.id||user?.username||'');
-    const assigned=String(record?.assigned_to??record?.region_manager_id??record?.manager_id??'');
-    return assigned===me || String(record?.region_manager_id||'')===me;
+    const assigned=String(record?.assigned_to??record?.responsible_manager_id??record?.manager_id??'');
+    return assigned===me || String(record?.responsible_manager_id||'')===me;
   }
   return !!record?.visible;
 }
 function filterByResponsibleManager1S(records, managerId){
   if(!managerId) return records||[];
   const id=String(managerId);
-  return (records||[]).filter(r=>String(r?.assigned_to??r?.region_manager_id??r?.manager_id??'')===id);
+  return (records||[]).filter(r=>String(r?.assigned_to??r?.responsible_manager_id??r?.manager_id??'')===id);
 }
 function isWithdrawn1S(record){
   return /منسحب|withdraw/i.test(String(record?.status||''));
@@ -28,7 +28,7 @@ function buildWithdrawalSubmission1S(record, values){
 
 /* 1S — workflow semantics */
 const CASE_STATUS_1S = Object.freeze({
-  REQUIRED:'waiting_region',
+  REQUIRED:'waiting_responsible',
   APPROVAL:'waiting_approval',
   WITHDRAWAL_APPROVAL:'waiting_withdrawal_approval',
   CLOSED:'closed',
@@ -36,31 +36,31 @@ const CASE_STATUS_1S = Object.freeze({
   CANCELLED:'cancelled',
   WITHDRAWN:'withdrawn'
 });
-function caseNeedsRegionAction1S(status){
-  return ['waiting_region','returned'].includes(String(status||'').toLowerCase());
+function caseNeedsResponsibleAction1S(status){
+  return ['waiting_responsible','returned'].includes(String(status||'').toLowerCase());
 }
 function caseNeedsApproval1S(status){
   return ['waiting_approval','waiting_withdrawal_approval'].includes(String(status||'').toLowerCase());
 }
-function caseIsFinishedForRegion1S(status){
+function caseIsFinishedForResponsible1S(status){
   return ['closed','stopped','cancelled','withdrawn','verified','documented'].includes(String(status||'').toLowerCase());
 }
 
 
-/* V18.7 — region action semantics */
-function isRegionRequiredAction(record){
+/* V18.7 — responsible action semantics */
+function isResponsibleRequiredAction(record){
   const s=String(record?.status||'').trim().toLowerCase();
-  return /بانتظار.*إفادة|مطلوب.*إجراء|returned|needs.?action|waiting.*region|correction/.test(s)
+  return /بانتظار.*إفادة|مطلوب.*إجراء|returned|needs.?action|waiting.*responsible|correction/.test(s)
          && !/منسحب|withdraw|cancel|ملغ/.test(s);
 }
-function isRegionWithdrawn(record){
+function isResponsibleWithdrawn(record){
   const s=String(record?.status||'').trim().toLowerCase();
   return /منسحب|withdraw/.test(s);
 }
-function filterRegionRequiredActions(records){
-  return (records||[]).filter(isRegionRequiredAction);
+function filterResponsibleRequiredActions(records){
+  return (records||[]).filter(isResponsibleRequiredAction);
 }
-function openRegionExternalAction(record, action){
+function openResponsibleExternalAction(record, action){
   // External action must execute directly; withdrawn is not routed through
   // the required-actions list and does not open another duplicate card.
   if(action==='withdrawn') return window.location.assign(`/records/${record.id}?action=withdrawn`);
@@ -68,21 +68,21 @@ function openRegionExternalAction(record, action){
   if(action==='approve') return window.location.assign(`/records/${record.id}?action=approve`);
 }
 
-/* V18.5 — region manager workspace */
-function regionManagerBucket(status){
+/* V18.5 — responsible manager workspace */
+function responsibleManagerBucket(status){
   const s=String(status||'').trim().toLowerCase();
   if(/بانتظار الاعتماد|waiting.*approv|pending.*approv|approval/.test(s)) return 'approval';
-  if(/مطلوب.*إجراء|waiting.*region|required|respond/.test(s)) return 'required';
-  // "منتهية" means all cases that have already passed through this region,
+  if(/مطلوب.*إجراء|waiting.*responsible|required|respond/.test(s)) return 'required';
+  // "منتهية" means all cases that have already passed through this responsible,
   // including externally completed/withdrawn/cancelled/stopped/closed states.
   if(/تم التوثيق|منسحب|ملغاة|موقوف|closed|document|withdraw|cancel/.test(s)) return 'completed';
   return 'completed';
 }
 
-function buildRegionManagerBuckets(records){
+function buildResponsibleManagerBuckets(records){
   const out={completed:[],approval:[],required:[]};
   (records||[]).forEach(r=>{
-    const b=regionManagerBucket(r.status);
+    const b=responsibleManagerBucket(r.status);
     out[b].push(r);
   });
   return out;
@@ -91,12 +91,12 @@ function buildRegionManagerBuckets(records){
 
 const app = document.querySelector("#app");
 
-const roleLabel = {admin:"مدير النظام", manager:"مدير", supervisor:"مشرف", requester:"HR", region:"مسؤول إقليم", viewer:"مشاهد"};
+const roleLabel = {admin:"مدير النظام", manager:"مدير", supervisor:"مشرف", requester:"HR", responsible:"مسؤول", viewer:"مشاهد"};
 const statusLabel = {
-  waiting_region:"بانتظار الإفادة",
+  waiting_responsible:"بانتظار الإفادة",
   returned:"مرتجع للتصحيح",
-  region_documented:"بانتظار الاعتماد",
-  region_withdrawn:"بانتظار اعتماد الانسحاب",
+  responsible_documented:"بانتظار الاعتماد",
+  responsible_withdrawn:"بانتظار اعتماد الانسحاب",
   final_documented:"تم التوثيق",
   final_withdrawn:"منسحب الموظف",
   cancelled:"ملغاة",
@@ -104,8 +104,8 @@ const statusLabel = {
 };
 const permLabel = {
   view_records:"استعراض المعاملات", upload_contracts:"رفع المعاملات",
-  respond_region:"إفادة مسؤول الإقليم", approve:"الاعتماد النهائي",
-  manage_users:"إدارة المستخدمين", manage_regions:"إدارة الأقاليم",
+  respond_responsible:"إفادة المسؤول", approve:"الاعتماد النهائي",
+  manage_users:"إدارة المستخدمين", 
   manage_delegations:"إدارة التفويضات", settings:"الإعدادات",
   stop_records:"إيقاف المعاملات", cancel_records:"إلغاء المعاملات",
   export:"تصدير البيانات", reassign_records:"سحب وإعادة إسناد",
@@ -116,22 +116,22 @@ const permLabel = {
 };
 const roleDefaults = {
   admin: Object.keys(permLabel),
-  manager: ["view_records","upload_contracts","respond_region","approve","manage_users","manage_regions","manage_delegations","settings","stop_records","cancel_records","export","reassign_records","delegate_records","view_closed","reactivate_records","view_stats","view_audit_log","export_audit_log"],
-  supervisor: ["view_records","upload_contracts","respond_region","approve","reassign_records","view_closed","view_stats","view_audit_log","export"],
+  manager: ["view_records","upload_contracts","respond_responsible","approve","manage_users","manage_delegations","settings","stop_records","cancel_records","export","reassign_records","delegate_records","view_closed","reactivate_records","view_stats","view_audit_log","export_audit_log"],
+  supervisor: ["view_records","upload_contracts","respond_responsible","approve","reassign_records","view_closed","view_stats","view_audit_log","export"],
   requester: ["view_records","upload_contracts","approve","export","reassign_records","delegate_records","manage_delegations","view_stats","view_audit_log","export_audit_log","view_closed"],
-  region: ["view_records","respond_region"],
+  responsible: ["view_records","respond_responsible"],
   viewer: ["view_records"]
 };
 const permGroups = [
-  {title:"المعاملات", items:["view_records","upload_contracts","respond_region","approve","stop_records","cancel_records","reassign_records","delegate_records","view_closed","reactivate_records","export","view_stats"]},
-  {title:"الإدارة", items:["manage_users","manage_regions","manage_delegations","settings","manage_data","view_audit_log","export_audit_log"]}
+  {title:"المعاملات", items:["view_records","upload_contracts","respond_responsible","approve","stop_records","cancel_records","reassign_records","delegate_records","view_closed","reactivate_records","export","view_stats"]},
+  {title:"الإدارة", items:["manage_users","manage_delegations","settings","manage_data","view_audit_log","export_audit_log"]}
 ];
 
 let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
-let usersCache=[], regionsCache=null;
+let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="19.3.0";
+const APP_VERSION="20.0.0";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -163,7 +163,7 @@ const liveDuration = (start, paused, end) => {
 const apiCache=new Map();
 async function api(url, opts={}) {
   const isGet=!opts.method || String(opts.method).toUpperCase()==="GET";
-  const cacheable=isGet && url==="/api/regions";
+  const cacheable=false;
   if(cacheable){const c=apiCache.get(url);if(c&&Date.now()-c.at<30000)return c.data;}
   const requestUrl=opts.cacheBust?`${url}${url.includes("?")?"&":"?"}_=${opts.cacheBust}`:url;
   const r=await fetch(requestUrl,{...opts,headers:{"content-type":"application/json",...(opts.headers||{})}});
@@ -172,7 +172,7 @@ async function api(url, opts={}) {
   if(contentType.includes("application/json")){ try{data=await r.json()}catch{} }
   else { const text=await r.text().catch(()=>""); if(text)data={error:text.slice(0,500)}; }
   if(!r.ok){const err=Error(data.error||`تعذر تنفيذ العملية (${r.status})`);err.status=r.status;err.data=data;err.url=requestUrl;throw err;}
-  if(cacheable){apiCache.set(url,{at:Date.now(),data});regionsCache=data;}
+
   return data;
 }
 async function ensureXLSX(){
@@ -195,7 +195,7 @@ function toast(message,type="ok"){
 }
 function icon(type){return ({blue:"◷",green:"✓",orange:"!",red:"×",purple:"↗"})[type]||"•";}
 function navIcon(name){
- const m={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5.2v-6h-5.6v6H4a1 1 0 0 1-1-1z"/></svg>',records:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',upload:'<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',stats:'<svg viewBox="0 0 24 24"><path d="M5 19V10M12 19V5M19 19v-8"/></svg>',archive:'<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM3 4h18v3H3zM9 11h6"/></svg>',users:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 5.5a3 3 0 0 1 0 5.8M16 14a5 5 0 0 1 4.5 6"/></svg>',regions:'<svg viewBox="0 0 24 24"><path d="M5 4h6v6H5zM13 14h6v6h-6zM13 4h6v6h-6zM5 14h6v6H5z"/></svg>',audit:'<svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>'};return m[name]||m.records;}
+ const m={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5.2v-6h-5.6v6H4a1 1 0 0 1-1-1z"/></svg>',records:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',upload:'<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',stats:'<svg viewBox="0 0 24 24"><path d="M5 19V10M12 19V5M19 19v-8"/></svg>',archive:'<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM3 4h18v3H3zM9 11h6"/></svg>',users:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 5.5a3 3 0 0 1 0 5.8M16 14a5 5 0 0 1 4.5 6"/></svg>',responsibles:'<svg viewBox="0 0 24 24"><path d="M5 4h6v6H5zM13 14h6v6h-6zM13 4h6v6h-6zM5 14h6v6H5z"/></svg>',audit:'<svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>'};return m[name]||m.records;}
 function stat(label,value,type="blue",sub=""){return `<div class="statCard"><span class="statIcon ${type}">${icon(type)}</span><div><small>${esc(label)}</small><strong>${value}</strong>${sub?`<em>${esc(sub)}</em>`:""}</div></div>`;}
 function navActive(key){document.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("active",x.dataset.nav===key));}
 function enhanceSelects(root=document){
@@ -233,7 +233,6 @@ function layout(u){
   if(can("view_stats")) navItems.push(`<button data-nav="stats" onclick="statsPage()"><i class="navIcon">${navIcon("stats")}</i><span>تحليل الأداء</span></button>`);
   if(can("view_closed")) navItems.push(`<button data-nav="closed" onclick="list('closed')"><i class="navIcon">${navIcon("archive")}</i><span>الأرشيف</span></button>`);
   if(can("manage_users")) navItems.push(`<button data-nav="users" onclick="users()"><i class="navIcon">${navIcon("users")}</i><span>المستخدمون</span></button>`);
-  if(can("manage_regions")) navItems.push(`<button data-nav="regions" onclick="regions()"><i class="navIcon">${navIcon("regions")}</i><span>الأقاليم</span></button>`);
   if(can("view_audit_log")) navItems.push(`<button data-nav="audit" onclick="auditPage()"><i class="navIcon">${navIcon("audit")}</i><span>سجل النشاط</span></button>`);
   app.innerHTML=`<div class="appShell">
     <main class="main">
@@ -242,14 +241,14 @@ function layout(u){
         <nav class="topNav">${navItems.join("")}</nav>
         <div class="topActions"><div class="connection"><i></i> متصل</div><button class="avatarTop" onclick="${admin?"users()":"dash()"}">${esc(u.name?.[0]||"م")}</button><button class="logoutTop" onclick="logout()">خروج</button></div>
       </header>
-      <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
+      <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="responsible"?"مسؤولك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
       <footer class="appFooter"><span>Contract Control</span><b>V${APP_VERSION}</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
       <button data-mnav="records" onclick="list()">${navIcon("records")}<span>المعاملات</span></button>
-${u.role==="region"?`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>أدائي</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
+${u.role==="responsible"?`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>أدائي</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
       ${can("manage_users")?`<button data-mnav="users" onclick="users()">${navIcon("users")}<span>المستخدمون</span></button>`:""}
     </div>
   </div>`;
@@ -270,32 +269,32 @@ async function boot(){try{const d=await api("/api/me");ME=d.user;if(ME){layout(M
 let idleGuard=null;
 function startIdleGuard(){clearInterval(idleGuard);idleGuard=setInterval(async()=>{if(!ME)return;try{const d=await api("/api/me",{cacheBust:Date.now()});if(!d.user){clearInterval(idleGuard);ME=null;toast("انتهت الجلسة بسبب عدم النشاط لمدة 30 دقيقة","err");login();}}catch(e){if(String(e.message).includes("غير مصرح")){clearInterval(idleGuard);ME=null;login();}}},60000)}
 async function dash(){
-  VIEW="home";navActive("home");title("الرئيسية",ME?.role==="region"?"ملخص أدائك خلال آخر 7 أيام":"مركز القيادة والمتابعة");
+  VIEW="home";navActive("home");title("الرئيسية",ME?.role==="responsible"?"ملخص أدائك خلال آخر 7 أيام":"مركز القيادة والمتابعة");
   const view=document.querySelector("#view"); view.innerHTML=`<div class="loading">جاري تجهيز مركز القيادة…</div>`;
   try{
     const d=await api("/api/dashboard");
     const done=(d.documented||0)+(d.withdrawn||0);
     const pct=d.total?Math.round(done/d.total*100):0;
-    const heroTitle=ME.role==="region"?`مرحباً ${esc(ME.name)}`:"مركز القيادة";
-    view.innerHTML=`<section class="commandHero"><div class="heroCopy"><span>LIVE CONTROL</span><h2>${heroTitle}</h2><p>${ME.role==="region"?"صورة مختصرة عن معاملات إقليمك خلال آخر أسبوع، وما يحتاج تدخلك الآن.":"نظرة تنفيذية على حجم العمل، الاختناقات، الأداء، وآخر حركة في النظام."}</p><div class="heroActions">${can("upload_contracts")?`<button class="heroBtn" onclick="add()">＋ معاملة جديدة</button>`:""}<button class="heroGhost" onclick="list()">استعراض المعاملات ←</button></div></div><div class="heroMetric"><small>نسبة الإنجاز</small><strong>${pct}%</strong><div><i style="width:${pct}%"></i></div><span>${done} من ${d.total||0} منجزة</span></div></section>
-    <div class="statsGrid">${stat("إجمالي المعاملات",d.total||0,"blue")}${stat(ME.role==="region"?"مطلوب منك":"تحتاج إجراء",d.required||0,"orange")}${stat("منجز نهائياً",done,"green")}${stat("متأخر",d.overdue||0,"red",d.overdue?"يتطلب تدخلاً":"ضمن SLA")}</div>
-    ${ME.role==="region"?regionHome(d):adminHome(d)}
+    const heroTitle=ME.role==="responsible"?`مرحباً ${esc(ME.name)}`:"مركز القيادة";
+    view.innerHTML=`<section class="commandHero"><div class="heroCopy"><span>LIVE CONTROL</span><h2>${heroTitle}</h2><p>${ME.role==="responsible"?"صورة مختصرة عن معاملات مسؤولك خلال آخر أسبوع، وما يحتاج تدخلك الآن.":"نظرة تنفيذية على حجم العمل، الاختناقات، الأداء، وآخر حركة في النظام."}</p><div class="heroActions">${can("upload_contracts")?`<button class="heroBtn" onclick="add()">＋ معاملة جديدة</button>`:""}<button class="heroGhost" onclick="list()">استعراض المعاملات ←</button></div></div><div class="heroMetric"><small>نسبة الإنجاز</small><strong>${pct}%</strong><div><i style="width:${pct}%"></i></div><span>${done} من ${d.total||0} منجزة</span></div></section>
+    <div class="statsGrid">${stat("إجمالي المعاملات",d.total||0,"blue")}${stat(ME.role==="responsible"?"مطلوب منك":"تحتاج إجراء",d.required||0,"orange")}${stat("منجز نهائياً",done,"green")}${stat("متأخر",d.overdue||0,"red",d.overdue?"يتطلب تدخلاً":"ضمن SLA")}</div>
+    ${ME.role==="responsible"?responsibleHome(d):adminHome(d)}
     ${ME.role==="admin"?activityPanel(d.recent_activity||[]):""}`;
     startLiveTimers();
   }catch(e){view.innerHTML=errorState(e.message);}
 }
-function regionHome(d){
+function responsibleHome(d){
   const pct=d.total?Math.round(((d.documented||0)+(d.withdrawn||0))/d.total*100):0;
-  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">REGION PULSE</span><h2>نبض الإقليم</h2><p>المؤشرات التي تحتاجها لاتخاذ القرار بسرعة.</p></div><button class="soft" onclick="statsPage()">تحليل أدائي ←</button></div><div class="regionPulse"><div class="pulseMain"><small>المعاملات النشطة</small><strong>${d.inprog||0}</strong><span>منها ${d.required||0} مطلوب منك الآن</span><div class="progress"><i style="width:${Math.min(100,Math.round((d.required||0)/Math.max(1,d.inprog||1)*100))}%"></i></div></div><div class="pulseList"><div><span>مطلوب إفادة</span><b>${d.required||0}</b></div><div><span>بانتظار الاعتماد</span><b>${(d.inprog||0)-(d.required||0)-(d.stopped||0)<0?0:(d.inprog||0)-(d.required||0)-(d.stopped||0)}</b></div><div><span>موقوف</span><b class="dangerText">${d.stopped||0}</b></div><div><span>متأخر</span><b class="dangerText">${d.overdue||0}</b></div></div></div></section>`;
+  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">RESPONSIBLE PULSE</span><h2>نبض المسؤول</h2><p>المؤشرات التي تحتاجها لاتخاذ القرار بسرعة.</p></div><button class="soft" onclick="statsPage()">تحليل أدائي ←</button></div><div class="responsiblePulse"><div class="pulseMain"><small>المعاملات النشطة</small><strong>${d.inprog||0}</strong><span>منها ${d.required||0} مطلوب منك الآن</span><div class="progress"><i style="width:${Math.min(100,Math.round((d.required||0)/Math.max(1,d.inprog||1)*100))}%"></i></div></div><div class="pulseList"><div><span>مطلوب إفادة</span><b>${d.required||0}</b></div><div><span>بانتظار الاعتماد</span><b>${(d.inprog||0)-(d.required||0)-(d.stopped||0)<0?0:(d.inprog||0)-(d.required||0)-(d.stopped||0)}</b></div><div><span>موقوف</span><b class="dangerText">${d.stopped||0}</b></div><div><span>متأخر</span><b class="dangerText">${d.overdue||0}</b></div></div></div></section>`;
 }
 function adminHome(d){
   const managers=d.managers||[];
-  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">MANAGER PERFORMANCE</span><h2>أداء مسؤولي الأقاليم</h2><p>المؤشرات مصممة لتحديد الاختناق قبل أن يصبح تأخيراً.</p></div><button class="soft" onclick="statsPage()">فتح التحليل الكامل ←</button></div><div class="managerGrid">${managers.map((m,i)=>managerCard(m,i)).join("")||emptyState("لا يوجد مسؤولون نشطون")}</div></section>`;
+  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">MANAGER PERFORMANCE</span><h2>أداء المسؤولين</h2><p>المؤشرات مصممة لتحديد الاختناق قبل أن يصبح تأخيراً.</p></div><button class="soft" onclick="statsPage()">فتح التحليل الكامل ←</button></div><div class="managerGrid">${managers.map((m,i)=>managerCard(m,i)).join("")||emptyState("لا يوجد مسؤولون نشطون")}</div></section>`;
 }
 function managerCard(m,i){
   const total=Number(m.total||0), req=Number(m.required||0), done=Number(m.completed||0), stop=Number(m.stopped||0);
   const pct=total?Math.round(done/total*100):0;
-  return `<article class="managerCard"><div class="managerTop"><div class="rankBadge">${i+1}</div><div class="avatar">${esc(m.name?.[0]||"م")}</div><div class="managerIdentity"><h3>${esc(m.name)}</h3><span>${esc(m.region||"بدون إقليم")}</span></div><button class="iconBtn" onclick="statsPage(${m.id})">↗</button></div><div class="managerNumbers"><div><small>نشطة</small><b>${total}</b></div><div><small>مطلوب منه</small><b class="orangeText">${req}</b></div><div><small>موقوفة</small><b class="dangerText">${stop}</b></div></div><div class="progress"><i style="width:${pct}%"></i></div><div class="managerBottom"><span>${pct}% إنجاز</span><button class="textBtn" onclick="statsPage(${m.id})">تفاصيل الأداء</button></div></article>`;
+  return `<article class="managerCard"><div class="managerTop"><div class="rankBadge">${i+1}</div><div class="avatar">${esc(m.name?.[0]||"م")}</div><div class="managerIdentity"><h3>${esc(m.name)}</h3><span>${esc(roleLabel["responsible"]||"مسؤول")}</span></div><button class="iconBtn" onclick="statsPage(${m.id})">↗</button></div><div class="managerNumbers"><div><small>نشطة</small><b>${total}</b></div><div><small>مطلوب منه</small><b class="orangeText">${req}</b></div><div><small>موقوفة</small><b class="dangerText">${stop}</b></div></div><div class="progress"><i style="width:${pct}%"></i></div><div class="managerBottom"><span>${pct}% إنجاز</span><button class="textBtn" onclick="statsPage(${m.id})">تفاصيل الأداء</button></div></article>`;
 }
 function activityPanel(items){
   return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">AUDIT STREAM</span><h2>آخر النشاطات</h2><p>الحركة الأخيرة على المعاملات في المركز.</p></div><button class="soft" onclick="auditPage()">السجل الكامل ←</button></div><div class="activityTable"><div class="activityHeader"><span>النشاط</span><span>المعاملة</span><span>المستخدم</span><span>التاريخ</span></div>${items.length?items.slice(0,8).map(e=>`<div class="activityRow"><span><i></i>${esc(e.action||"نشاط")}</span><b>#${esc(e.record_id||"—")} ${esc(e.employee_name||"")}</b><span>${esc(e.actor_name||"النظام")}</span><small>${fmtDateTime(e.created_at)}</small></div>`).join(""):`<div class="emptyRow">لا توجد نشاطات حديثة</div>`}</div></section>`;
@@ -304,24 +303,24 @@ function title(a,b=""){document.querySelector("#pageTitle").textContent=a;docume
 function errorState(msg,retryFn="dash"){return `<div class="errorState"><div>!</div><h3>تعذر تحميل الشاشة</h3><p>${esc(msg||"حدث خطأ غير متوقع")}</p><button class="primary" onclick="${retryFn}()">إعادة المحاولة</button></div>`;}
 function emptyState(msg){return `<div class="emptyState"><span>⌁</span><b>${esc(msg)}</b></div>`;}
 async function list(mode=""){
-  if(ME.role==="region" && !mode) mode="required";
+  if(ME.role==="responsible" && !mode) mode="required";
   VIEW=mode||"records"; navActive(mode==="closed"?"closed":"records");
-  const pageTitle=ME.role==="region"?(mode==="closed"?"منتهية":mode==="approval"?"بانتظار الاعتماد":"مطلوب مني"):(mode==="closed"?"الأرشيف":mode==="required"?"المطلوب مني":"المعاملات");
-  const sub=ME.role==="region"?"":(mode==="required"?"المعاملات التي تحتاج إجراءك الآن":"");
+  const pageTitle=ME.role==="responsible"?(mode==="closed"?"منتهية":mode==="approval"?"بانتظار الاعتماد":"مطلوب مني"):(mode==="closed"?"الأرشيف":mode==="required"?"المطلوب مني":"المعاملات");
+  const sub=ME.role==="responsible"?"":(mode==="required"?"المعاملات التي تحتاج إجراءك الآن":"");
   title(pageTitle,sub);
   const v=document.querySelector("#view");
   v.innerHTML=`<section class="section">
     <div class="sectionHead"><div><span class="eyebrow">TRANSACTION INBOX</span><h2>${esc(pageTitle)}</h2></div>${can("export")?`<button class="soft" onclick="exportFromList()">تصدير النتائج</button>`:""}</div>
-    ${ME.role==="region"?`<div class="regionWorkspace"><div class="regionWorkspaceIntro"><span class="eyebrow">REGION WORKSPACE</span><strong>صندوق عمل الإقليم</strong><small>مطلوب منك · بانتظار الاعتماد · منتهية</small></div><div class="inboxTabs regionTabs"><button class="${mode==="required"?"active":""}" onclick="list('required')"><span>مطلوب مني</span><b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')"><span>بانتظار الاعتماد</span><b id="approvalBadge">0</b></button><button class="${mode==="closed"?"active":""}" onclick="list('closed')"><span>منتهية</span><b id="closedBadge">0</b></button></div></div>`:""}
-    <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة">${ME.role==="region"?"":`<select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_region">بانتظار إفادة الإقليم</option><option value="returned">مرتجع للتصحيح</option><option value="region_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="region_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select>`}${ME.role==="region"?"":`<select id="managerFilter"><option value="">كل المسؤولين</option></select>`}<label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div>
+    ${ME.role==="responsible"?`<div class="responsibleWorkspace"><div class="responsibleWorkspaceIntro"><span class="eyebrow">RESPONSIBLE WORKSPACE</span><strong>صندوق عمل المسؤول</strong><small>مطلوب منك · بانتظار الاعتماد · منتهية</small></div><div class="inboxTabs responsibleTabs"><button class="${mode==="required"?"active":""}" onclick="list('required')"><span>مطلوب مني</span><b id="reqBadge">0</b></button><button class="${mode==="approval"?"active":""}" onclick="list('approval')"><span>بانتظار الاعتماد</span><b id="approvalBadge">0</b></button><button class="${mode==="closed"?"active":""}" onclick="list('closed')"><span>منتهية</span><b id="closedBadge">0</b></button></div></div>`:""}
+    <div class="filterBar"><input id="q" placeholder="بحث برقم الموظف، الاسم، أو رقم المعاملة">${ME.role==="responsible"?"":`<select id="statusFilter"><option value="">كل الحالات</option><option value="required">مطلوب إجراء</option><option value="waiting_responsible">بانتظار إفادة المسؤول</option><option value="returned">مرتجع للتصحيح</option><option value="responsible_documented">تمت الإفادة — بانتظار الاعتماد</option><option value="responsible_withdrawn">إفادة انسحاب — بانتظار الاعتماد</option><option value="stopped">موقوفة</option><option value="final_documented">تم التوثيق</option><option value="final_withdrawn">منسحب الموظف</option><option value="cancelled">ملغاة</option></select>`}${ME.role==="responsible"?"":`<select id="managerFilter"><option value="">كل المسؤولين</option></select>`}<label>من<input id="fromFilter" type="date"></label><label>إلى<input id="toFilter" type="date"></label><button class="primary" onclick="loadRecords()">بحث</button></div><div id="recordCards" class="recordGrid"></div>
   </section>`;
-  if(ME.role!=="region"){const sf=document.querySelector("#statusFilter");if(sf)sf.value=mode||"";}
+  if(ME.role!=="responsible"){const sf=document.querySelector("#statusFilter");if(sf)sf.value=mode||"";}
   try{const d=await api("/api/managers");const mf=document.querySelector("#managerFilter");if(mf)mf.innerHTML=`<option value="">كل المسؤولين</option>${(d.managers||[]).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}`}catch{}
   await loadRecords();
-  if(ME.role==="region") refreshRegionWorkspaceCounts();
+  if(ME.role==="responsible") refreshResponsibleWorkspaceCounts();
 }
-async function refreshRegionWorkspaceCounts(){
-  if(ME?.role!=="region")return;
+async function refreshResponsibleWorkspaceCounts(){
+  if(ME?.role!=="responsible")return;
   try{
     const [a,b,c]=await Promise.all([api("/api/records?status=required&limit=1"),api("/api/records?status=approval&limit=1"),api("/api/records?status=closed&limit=1")]);
     const put=(id,v)=>{const e=document.querySelector(id);if(e)e.textContent=Number(v||0)};
@@ -349,14 +348,14 @@ async function loadMoreRecords(btn){
  try{const qs=new URLSearchParams({q,status,manager_id,from,to,limit:"60",offset:String(current)});const d=await api("/api/records?"+qs);let rows=d.records||[];if(VIEW==="closed")rows=rows.filter(r=>["final_documented","final_withdrawn","cancelled"].includes(r.status));btn.insertAdjacentHTML("beforebegin",rows.map(recordCard).join(""));if(!d.has_more)btn.remove();else{btn.disabled=false;btn.textContent="تحميل المزيد"}startLiveTimers()}catch(e){btn.disabled=false;btn.textContent="إعادة المحاولة";toast(e.message,"err")}}
 function recordCard(r){
   const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
-  const canRegion=ME?.role==="region" && can("respond_region") && ["waiting_region","returned"].includes(r.status);
-  const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["region_documented","region_withdrawn"].includes(r.status);
+  const canResponsible=ME?.role==="responsible" && can("respond_responsible") && ["waiting_responsible","returned"].includes(r.status);
+  const canApprove=(ME?.role==="requester"||ME?.role==="admin") && can("approve") && ["responsible_documented","responsible_withdrawn"].includes(r.status);
   const actionNo=r.interruption_transaction_no||"";
-  const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status);
+  const withdrawn=["responsible_withdrawn","final_withdrawn"].includes(r.status);
   const status=statusLabel[r.status]||r.status||"—";
-  const waitingAt=(r.status==="waiting_region"||r.status==="returned")?(r.region_user_name||"مسؤول الإقليم"):"";
-  const primary=canRegion
-    ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickRegion(${r.id})">إفادة</button>`
+  const waitingAt=(r.status==="waiting_responsible"||r.status==="returned")?(r.responsible_user_name||"المسؤول"):"";
+  const primary=canResponsible
+    ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickResponsible(${r.id})">إفادة</button>`
     : canApprove
       ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`
       : `<button class="v3-action ghostAction" onclick="event.stopPropagation();openRecord(${r.id})">تفاصيل</button>`;
@@ -367,56 +366,55 @@ function recordCard(r){
       <div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")}</small></div>
     </div>
     <div class="v3-case-type" onclick="event.stopPropagation();copyRecordValue(${JSON.stringify(String(r.transaction_no||""))},'رقم المعاملة')"><span class="v3-label">رقم معاملة التعيين</span><b class="v3-monoValue copyValue" title="اضغط للنسخ">${esc(r.transaction_no||"—")}</b></div>
-    <div class="v3-case-region"><span class="v3-label">الإقليم</span><b>${esc(r.region||"—")}</b></div>
-    <div class="v3-case-assignee"><span class="v3-label">المسؤول</span><b>${esc(r.region_user_name||"—")}</b></div>
+    <div class="v3-case-assignee"><span class="v3-label">المسؤول</span><b>${esc(r.responsible_user_name||"—")}</b></div>
     <div class="v3-case-status v3-case-status-stack">
       ${withdrawn
         ? `<span class="v3-status is-danger">↗ منسحب الموظف</span><span class="v3-status is-danger v3-action-badge">#${esc(actionNo||"—")} — انقطاع / اتخاذ إجراء</span>`
         : waitingAt
           ? `<span class="v3-status is-pending">بانتظار الإفادة</span><span class="v3-status is-pending v3-waiting-user">متوقف عند: ${esc(waitingAt)}</span>`
-          : `<span class="v3-status ${finished?'is-done':r.status==='region_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span>`}
+          : `<span class="v3-status ${finished?'is-done':r.status==='responsible_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span>`}
     </div>
     <div class="v3-case-action">${primary}<button class="v3-open" aria-label="فتح">↗</button></div>
   </div>`;
 }
-async function quickRegion(id){
+async function quickResponsible(id){
   document.querySelector(".quickActionStrip")?.remove();
   try{
     const d=await api(`/api/records/${id}`),r=d.record;
     const cards=document.querySelector("#recordCards"); if(!cards)return;
     cards.insertAdjacentHTML("beforebegin",`<section class="quickActionStrip" data-record="${id}">
-      <div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إفادة سريعة · #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.region)}</small></div></div>
+      <div class="qaIdentity"><span class="qaBadge">إف</span><div><strong>إفادة سريعة · #${esc(r.id)}</strong><small>${esc(r.employee_name)} · ${esc(r.employee_no)} · ${esc(r.responsible_user_name||"—")}</small></div></div>
       <div class="qaField"><small>معاملة التعيين</small><b>${esc(r.transaction_no||"—")}</b></div>
-      <div class="qaActions"><button class="qaPrimary" onclick="quickRegionSubmit(${id},'documented')">تم التوثيق</button><button class="qaDanger" onclick="quickRegionWithdraw(${id})">منسحب</button></div>
-      <div id="quickRegionArea" class="qaArea"><label>الإفادة<textarea id="quickRegionNote" placeholder="الإفادة المختصرة..."></textarea></label></div>
+      <div class="qaActions"><button class="qaPrimary" onclick="quickResponsibleSubmit(${id},'documented')">تم التوثيق</button><button class="qaDanger" onclick="quickResponsibleWithdraw(${id})">منسحب</button></div>
+      <div id="quickResponsibleArea" class="qaArea"><label>الإفادة<textarea id="quickResponsibleNote" placeholder="الإفادة المختصرة..."></textarea></label></div>
     </section>`);
     document.querySelector(".quickActionStrip")?.scrollIntoView({behavior:"smooth",block:"nearest"});
   }catch(e){toast(e.message,"err")}
 }
-async function quickRegionSubmit(id,kind){
-  const note=document.querySelector("#quickRegionNote")?.value||"";
+async function quickResponsibleSubmit(id,kind){
+  const note=document.querySelector("#quickResponsibleNote")?.value||"";
   if(kind!=="documented")return;
-  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}
+  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"responsible_documented",note})});document.querySelector(".quickActionStrip")?.remove();toast("تم تسجيل الإفادة");loadRecords();}catch(e){toast(e.message,"err")}
 }
-function quickRegionWithdraw(id){
+function quickResponsibleWithdraw(id){
   document.querySelector(".withdrawalModal1s")?.remove();
   document.body.insertAdjacentHTML("beforeend",`<div class="modalShade withdrawalModal1s"><div class="withdrawalModal1s__box">
     <button class="modalClose" onclick="this.closest('.withdrawalModal1s').remove()">×</button>
-    <span class="eyebrow">REGION DECISION</span><h2>إفادة انسحاب الموظف</h2>
+    <span class="eyebrow">RESPONSIBLE DECISION</span><h2>إفادة انسحاب الموظف</h2>
     <p class="withdrawalModal1s__hint">سجل آخر يوم عمل ورقم معاملة الانقطاع / اتخاذ الإجراء ثم اعتمد الإفادة.</p>
     <div class="withdrawal-1s__grid">
       <label class="withdrawal-1s__field">آخر يوم عمل<input id="qEnd" type="date"></label>
       <label class="withdrawal-1s__field">رقم معاملة الانقطاع / اتخاذ الإجراء<input id="qTxn" inputmode="numeric" placeholder="رقم المعاملة"></label>
     </div>
-    <button class="danger wide big" onclick="quickRegionWithdrawSubmit(${id})">تسجيل إفادة الانسحاب</button>
+    <button class="danger wide big" onclick="quickResponsibleWithdrawSubmit(${id})">تسجيل إفادة الانسحاب</button>
   </div></div>`);
 }
-async function quickRegionWithdrawSubmit(id){
-  const note=document.querySelector("#quickRegionNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";
+async function quickResponsibleWithdrawSubmit(id){
+  const note=document.querySelector("#quickResponsibleNote")?.value||"",end=document.querySelector("#qEnd")?.value||"",txn=document.querySelector("#qTxn")?.value.trim()||"";
   if(!end||!txn)return toast("أكمل آخر يوم عمل ورقم معاملة الانقطاع / اتخاذ الإجراء","err");
-  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"region_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".withdrawalModal1s")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}
+  try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"responsible_withdrawn",note,end_date:end,interruption_transaction_no:txn})});document.querySelector(".withdrawalModal1s")?.remove();toast("تم تسجيل إفادة الانسحاب");loadRecords()}catch(e){toast(e.message,"err")}
 }
-async function quickApprove(id,status){const action=status==="region_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
+async function quickApprove(id,status){const action=status==="responsible_withdrawn"?"final_withdrawn":"final_documented";try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action,note:"اعتماد"})});toast("تم الاعتماد وإغلاق المعاملة");loadRecords()}catch(e){toast(e.message,"err")}}
 async function openRecord(id){
   const row=document.querySelector(`.v3-case-row[data-record-id="${id}"]`);
   const existing=document.querySelector(`.recordInlineDetails[data-record-id="${id}"]`);
@@ -429,7 +427,7 @@ async function openRecord(id){
     const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[];
     selectedRecord=r;
     const actionNo=r.interruption_transaction_no||"";
-    const withdrawn=["region_withdrawn","final_withdrawn"].includes(r.status);
+    const withdrawn=["responsible_withdrawn","final_withdrawn"].includes(r.status);
     const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
 
     const identity=`
@@ -439,7 +437,7 @@ async function openRecord(id){
           <div>
             <span class="v4-eyebrow">معاملة موظف</span>
             <h2>${esc(r.employee_name)}</h2>
-            <p>${esc(r.employee_no||"—")} <i>•</i> ${esc(r.region||"—")} <i>•</i> تعيين</p>
+            <p>${esc(r.employee_no||"—")} <i>•</i> تعيين</p>
           </div>
         </div>
         <div class="v4-identity-status">
@@ -454,7 +452,7 @@ async function openRecord(id){
         <div class="v4-overview-grid">
           <div><span>رقم معاملة التعيين</span><b>${esc(r.transaction_no||"—")}</b></div>
           <div><span>تاريخ المباشرة</span><b>${fmtDate(r.start_date)}</b></div><div><span>تاريخ المعاملة</span><b>${fmtDate(r.transaction_date||r.start_date)}</b></div>
-          <div><span>مسؤول الإقليم</span><b>${esc(r.region_user_name||"—")}</b></div>
+          <div><span>المسؤول</span><b>${esc(r.responsible_user_name||"—")}</b></div>
           <div><span>مقدم الطلب</span><b>${esc(r.requester_name||"—")}</b></div>
           ${withdrawn?`<div class="v4-withdraw-data"><span>الانقطاع / اتخاذ الإجراء</span><b>${esc(actionNo||"—")}</b></div><div class="v4-withdraw-data"><span>آخر يوم عمل</span><b>${fmtDate(r.end_date)}</b></div>`:""}
         </div>
@@ -491,8 +489,8 @@ async function openRecord(id){
   }
 }
 function finishedStatusClass(status){
-  if(["final_documented","region_documented"].includes(status)) return "success";
-  if(["stopped","waiting_region","returned","region_withdrawn"].includes(status)) return "warning";
+  if(["final_documented","responsible_documented"].includes(status)) return "success";
+  if(["stopped","waiting_responsible","returned","responsible_withdrawn"].includes(status)) return "warning";
   return "";
 }
 function stageSecondsClient(rows,stage){
@@ -505,34 +503,34 @@ function stageSecondsClient(rows,stage){
 }
 function info(label,value){return `<div><small>${label}</small><b>${esc(value||"—")}</b></div>`}
 function horizontalTimeline(r,stages){
- const defs=[['upload','رفع المعاملة','↑'],['region','إفادة الإقليم','✓'],['approval','الاعتماد','◆'],['closed','الإغلاق','✓']];
+ const defs=[['upload','رفع المعاملة','↑'],['responsible','إفادة المسؤول','✓'],['approval','الاعتماد','◆'],['closed','الإغلاق','✓']];
  const status=r.status;
- const idx=(status==='waiting_region'||status==='returned')?1:(status==='region_documented'||status==='region_withdrawn'?2:(['final_documented','final_withdrawn','cancelled'].includes(status)?3:0));
+ const idx=(status==='waiting_responsible'||status==='returned')?1:(status==='responsible_documented'||status==='responsible_withdrawn'?2:(['final_documented','final_withdrawn','cancelled'].includes(status)?3:0));
  return `<div class="hTimeline">${defs.map((d,i)=>{const done=i<idx||i===0&&idx>0,active=i===idx;const sec=stageSecondsClient(stages,d[0]);return `<div class="hStep ${done?'done ':''}${active?'active ':''}"><div class="hNode">${d[2]}</div><b>${d[1]}</b><small>${done?'مكتمل':active?'المرحلة الحالية':'قادم'}${sec?` · ${duration(sec)}`:''}</small></div>${i<defs.length-1?`<div class="hLine ${done?'done':''}"></div>`:''}`}).join('')}</div>`;
 }
 function actionsHtml(r){
   const admin=ME.role==="admin";
-  const regionCan=can("respond_region")&&(ME.role==="region"||admin);
+  const responsibleCan=can("respond_responsible")&&(ME.role==="responsible"||admin);
   const approveCan=can("approve")&&(ME.role==="requester"||admin);
   const active=!["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
 
   let h="";
-  if((r.status==="waiting_region"||r.status==="returned")&&regionCan){
+  if((r.status==="waiting_responsible"||r.status==="returned")&&responsibleCan){
     h+=`<div class="v4-action-card">
-      <div class="v4-action-title"><span class="v4-action-icon">إف</span><div><b>إفادة الإقليم</b><small>اختر النتيجة ثم نفذ الإجراء</small></div></div>
+      <div class="v4-action-title"><span class="v4-action-icon">إف</span><div><b>إفادة المسؤول</b><small>اختر النتيجة ثم نفذ الإجراء</small></div></div>
       <textarea id="detailNote" placeholder="ملاحظة الإفادة — اختيارية"></textarea>
       <div class="v4-action-buttons">
-        <button class="v4-btn success" onclick="perform(${r.id},'region_documented')">✓ تم التوثيق</button>
+        <button class="v4-btn success" onclick="perform(${r.id},'responsible_documented')">✓ تم التوثيق</button>
         <button class="v4-btn danger" onclick="withdrawForm(${r.id})">منسحب الموظف</button>
       </div>
       <div id="withdrawArea"></div>
     </div>`;
   }
-  if((r.status==="region_documented"||r.status==="region_withdrawn")&&approveCan){
+  if((r.status==="responsible_documented"||r.status==="responsible_withdrawn")&&approveCan){
     h+=`<div class="v4-action-card approval">
-      <div class="v4-action-title"><span class="v4-action-icon">✓</span><div><b>مراجعة واعتماد</b><small>${r.status==="region_withdrawn"?"اعتماد الانسحاب أو إعادة المعاملة":"اعتماد التوثيق أو إعادة المعاملة"}</small></div></div>
+      <div class="v4-action-title"><span class="v4-action-icon">✓</span><div><b>مراجعة واعتماد</b><small>${r.status==="responsible_withdrawn"?"اعتماد الانسحاب أو إعادة المعاملة":"اعتماد التوثيق أو إعادة المعاملة"}</small></div></div>
       <div class="v4-action-buttons">
-        ${r.status==="region_withdrawn"?`<button class="v4-btn danger" onclick="perform(${r.id},'final_withdrawn','approveNote')">اعتماد الانسحاب</button>`:`<button class="v4-btn success" onclick="perform(${r.id},'final_documented','approveNote')">اعتماد التوثيق</button>`}
+        ${r.status==="responsible_withdrawn"?`<button class="v4-btn danger" onclick="perform(${r.id},'final_withdrawn','approveNote')">اعتماد الانسحاب</button>`:`<button class="v4-btn success" onclick="perform(${r.id},'final_documented','approveNote')">اعتماد التوثيق</button>`}
         <button class="v4-btn light" onclick="perform(${r.id},'return','approveNote')">↩ إرجاع للتصحيح</button>
       </div>
       <textarea id="approveNote" placeholder="ملاحظة الاعتماد — اختيارية"></textarea>
@@ -554,7 +552,7 @@ async function withdrawForm(id){
       <label><span>آخر يوم عمل</span><input id="withdrawEnd" type="date" onclick="this.showPicker?.()"></label>
       <label><span>رقم الانقطاع / اتخاذ الإجراء</span><input id="withdrawTxn" inputmode="numeric" placeholder="رقم المعاملة"></label>
     </div>
-    <div class="v4-withdraw-actions"><button class="v4-btn light small" onclick="document.querySelector('#withdrawArea').innerHTML=''">إلغاء</button><button class="v4-btn danger small" onclick="perform(${id},'region_withdrawn')">تسجيل الانسحاب</button></div>
+    <div class="v4-withdraw-actions"><button class="v4-btn light small" onclick="document.querySelector('#withdrawArea').innerHTML=''">إلغاء</button><button class="v4-btn danger small" onclick="perform(${id},'responsible_withdrawn')">تسجيل الانسحاب</button></div>
   </div>`;
 }
 function reactivateForm(id){
@@ -575,7 +573,7 @@ async function performReactivate(id){
 async function perform(id,action,noteId="detailNote"){
   const note=document.querySelector("#"+noteId)?.value||"";
   const body={action,note};
-  if(action==="region_withdrawn"){body.end_date=document.querySelector("#withdrawEnd")?.value||"";body.interruption_transaction_no=document.querySelector("#withdrawTxn")?.value.trim()||"";if(!body.end_date||!body.interruption_transaction_no){toast("أكمل بيانات الانسحاب","err");return;}}
+  if(action==="responsible_withdrawn"){body.end_date=document.querySelector("#withdrawEnd")?.value||"";body.interruption_transaction_no=document.querySelector("#withdrawTxn")?.value.trim()||"";if(!body.end_date||!body.interruption_transaction_no){toast("أكمل بيانات الانسحاب","err");return;}}
   if(action==="return"&&!note.trim()){toast("اكتب سبب الإرجاع","err");return;}
   try{await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify(body)});toast(action==="stop"?"تم إيقاف المعاملة":action==="return"?"تم إرجاع المعاملة للتصحيح":"تم تحديث المعاملة");closeRecord();await list(VIEW==="required"?"required":VIEW==="closed"?"closed":"");}
   catch(e){toast(e.message,"err");}
@@ -583,7 +581,7 @@ async function perform(id,action,noteId="detailNote"){
 async function reassign(id){
   const sel=document.querySelector("#reassignManager");if(!sel?.value){toast("اختر المسؤول الجديد","err");return;}
   try{
-    await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"reassign",region_user_id:Number(sel.value),note:document.querySelector("#reassignNote")?.value||""})});
+    await api(`/api/records/${id}`,{method:"POST",body:JSON.stringify({action:"reassign",responsible_user_id:Number(sel.value),note:document.querySelector("#reassignNote")?.value||""})});
     toast("تم الإسناد بنجاح");
     closeRecord();
     await list(VIEW==="required"?"required":VIEW==="closed"?"closed":"");
@@ -591,7 +589,7 @@ async function reassign(id){
 }
 async function loadReassignManagers(){
   const w=document.querySelector("#reassignWrap");if(!w)return;
-  try{const d=await api("/api/managers");w.innerHTML=`<select id="reassignManager"><option value="">اختر المسؤول</option>${d.managers.map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(m.region||"بدون إقليم")}</option>`).join("")}</select>`}
+  try{const d=await api("/api/managers");w.innerHTML=`<select id="reassignManager"><option value="">اختر المسؤول</option>${d.managers.map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(roleLabel["responsible"]||"مسؤول")}</option>`).join("")}</select>`}
   catch(e){w.innerHTML=`<span class="err">${esc(e.message)}</span>`}
 }
 function closeRecord(){document.querySelectorAll('.recordInlineDetails').forEach(x=>x.remove());document.querySelector('.recordModal')?.remove();selectedRecord=null;}
@@ -603,10 +601,10 @@ function startLiveTimers(){
   if(selectedRecord && document.querySelector("#reassignWrap"))loadReassignManagers();
 }
 async function uploadPage(){
-  navActive("upload"); VIEW="upload"; title("رفع المعاملات","مركز إدخال موحد — معاملة فردية ورفع جماعي في شاشة واحدة.");
+  navActive("upload"); VIEW="upload"; title("رفع المعاملات","مركز إدخال موحد — كل معاملة ترتبط مباشرة بمسؤول محدد.");
   const v=document.querySelector("#view");
-  v.innerHTML=`<section class="section uploadWorkspace"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INTAKE</span><h2>مركز رفع المعاملات</h2><p>مسار فردي وجماعي في شاشة واحدة بدون تنقل.</p></div><a class="soft" href="/contract_upload_template.xlsx" download="نموذج_رفع_المعاملات.xlsx">↓ تحميل نموذج Excel</a></div><div class="intakeHub"><section class="intakeCard singleCard"><div class="intakeCardHead"><span class="intakeNumber">01</span><div><span class="eyebrow">SINGLE INTAKE</span><h3>معاملة واحدة</h3><p>إسناد تلقائي لمسؤول الإقليم.</p></div></div><div class="formGrid intakeForm"><label>رقم الموظف<input id="en" placeholder="مثال: 10245"></label><label>اسم الموظف<input id="nm" placeholder="اسم الموظف"></label><label>رقم معاملة التعيين<input id="tn" placeholder="رقم المعاملة"></label><label>الإقليم<select id="rg"></select></label><label>تاريخ المباشرة<input id="sd" type="date"></label></div><button class="primary big wide" onclick="save()">إنشاء المعاملة</button><p id="msg" class="formMessage"></p></section><section class="intakeCard bulkCard"><div class="intakeCardHead"><span class="intakeNumber">02</span><div><span class="eyebrow">BULK IMPORT</span><h3>رفع جماعي</h3><p>فحص الصفوف قبل الإنشاء.</p></div></div><div class="dropzone" id="dropzone"><div class="uploadGlyph">↑</div><h3>اسحب ملف Excel هنا</h3><p>XLSX · XLSM · XLS · CSV</p><span class="dropHint">أو اضغط لاختيار الملف</span><input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls,.csv"></div><div class="bulkActions"><div><b>فحص آمن قبل الإنشاء</b><span>الصفوف الناقصة تُرفض دون إيقاف الصفوف الصحيحة.</span></div><button class="primary big" onclick="importFile()">فحص الملف وإنشاء المعاملات</button></div><div id="importMsg"></div></section></div></section>`;
-  const rg=document.querySelector("#rg"); try{const d=await api("/api/regions");if(rg)rg.innerHTML=(d.regions||[]).map(r=>`<option>${esc(r.name||r)}</option>`).join("");}catch{if(rg)rg.innerHTML=`<option>تعذر تحميل الأقاليم</option>`;}
+  v.innerHTML=`<section class="section uploadWorkspace"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INTAKE</span><h2>مركز رفع المعاملات</h2><p>الإسناد يتم مباشرة إلى المستخدم المسؤول، بدون أي كيان وسيط.</p></div><a class="soft" href="/contract_upload_template.xlsx" download="نموذج_رفع_المعاملات.xlsx">↓ تحميل نموذج Excel</a></div><div class="intakeHub"><section class="intakeCard singleCard"><div class="intakeCardHead"><span class="intakeNumber">01</span><div><span class="eyebrow">SINGLE INTAKE</span><h3>معاملة واحدة</h3><p>اختر المسؤول مباشرة قبل الإنشاء.</p></div></div><div class="formGrid intakeForm"><label>رقم الموظف<input id="en" placeholder="مثال: 10245"></label><label>اسم الموظف<input id="nm" placeholder="اسم الموظف"></label><label>رقم معاملة التعيين<input id="tn" placeholder="رقم المعاملة"></label><label>المسؤول<select id="responsibleUser"></select></label><label>تاريخ المباشرة<input id="sd" type="date"></label></div><button class="primary big wide" onclick="save()">إنشاء المعاملة</button><p id="msg" class="formMessage"></p></section><section class="intakeCard bulkCard"><div class="intakeCardHead"><span class="intakeNumber">02</span><div><span class="eyebrow">BULK IMPORT</span><h3>رفع جماعي</h3><p>فحص الصفوف وربط كل صف بمسؤول مباشر.</p></div></div><div class="dropzone" id="dropzone"><div class="uploadGlyph">↑</div><h3>اسحب ملف Excel هنا</h3><p>XLSX · XLSM · XLS · CSV</p><span class="dropHint">أو اضغط لاختيار الملف</span><input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls,.csv"></div><div class="bulkActions"><div><b>فحص آمن قبل الإنشاء</b><span>كل صف يجب أن يحتوي اسم/حساب مسؤول صالح.</span></div><button class="primary big" onclick="importFile()">فحص الملف وإنشاء المعاملات</button></div><div id="importMsg"></div></section></div></section>`;
+  try{const d=await api("/api/managers?_="+Date.now());const rg=document.querySelector("#responsibleUser");if(rg)rg.innerHTML=`<option value="">اختر المسؤول</option>`+(d.managers||[]).map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(m.username)}</option>`).join("");}catch(e){const rg=document.querySelector("#responsibleUser");if(rg)rg.innerHTML=`<option value="">تعذر تحميل المسؤولين</option>`;}
   const dz=document.querySelector("#dropzone"),fi=document.querySelector("#fileInput"); dz.onclick=e=>{if(e.target!==fi)fi.click()};
   ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag")})); ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("drag")}));
   dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0]){fi.files=e.dataTransfer.files;dz.querySelector("h3").textContent=e.dataTransfer.files[0].name}}); fi.onchange=()=>{if(fi.files[0])dz.querySelector("h3").textContent=fi.files[0].name};
@@ -614,78 +612,37 @@ async function uploadPage(){
 async function add(){return uploadPage()}
 function bulk(){return uploadPage()}
 async function save(){
- const en=document.querySelector("#en"),nm=document.querySelector("#nm"),tn=document.querySelector("#tn"),rg=document.querySelector("#rg"),sd=document.querySelector("#sd"),msg=document.querySelector("#msg");
- try{await api("/api/records",{method:"POST",body:JSON.stringify({employee_no:en?.value.trim(),employee_name:nm?.value.trim(),transaction_no:tn?.value.trim(),region:rg?.value,start_date:sd?.value})});msg.className="formMessage ok";msg.textContent="تم إنشاء المعاملة وإسنادها تلقائياً.";en.value=nm.value=tn.value="";sd.value="";}catch(e){msg.className="formMessage err";msg.textContent=e.message;}
+ const en=document.querySelector("#en"),nm=document.querySelector("#nm"),tn=document.querySelector("#tn"),ru=document.querySelector("#responsibleUser"),sd=document.querySelector("#sd"),msg=document.querySelector("#msg");
+ try{await api("/api/records",{method:"POST",body:JSON.stringify({employee_no:en?.value.trim(),employee_name:nm?.value.trim(),transaction_no:tn?.value.trim(),responsible_user_id:Number(ru?.value||0),start_date:sd?.value})});msg.className="formMessage ok";msg.textContent="تم إنشاء المعاملة وإسنادها مباشرة إلى المسؤول.";en.value=nm.value=tn.value="";sd.value="";ru.value="";}catch(e){msg.className="formMessage err";msg.textContent=e.message;}
 }
-function firstVal(row,keys){for(const k of keys)if(row[k]!=null&&String(row[k]).trim()!=="")return String(row[k]).trim();return "";}
+function firstVal(row,keys){for(const k of keys)if(row[k]!=null&&String(row[k]).trim()!=="")return String(row[k]).trim();return ""}
 function normalizeDate(v){if(!v)return "";const s=String(v).trim();if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:s;}
 async function importFile(){
   const file=document.querySelector("#fileInput")?.files?.[0],msg=document.querySelector("#importMsg");if(!file){toast("اختر ملف Excel أولاً","err");return;}
   try{msg.innerHTML=`<div class="loadingMini">جاري تجهيز محرك Excel وفحص ${esc(file.name)}…</div>`;const XLSX=await ensureXLSX();const wb=XLSX.read(await file.arrayBuffer(),{cellDates:true,raw:false});const sheet=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(sheet,{defval:"",raw:false});if(!raw.length)throw Error("الملف فارغ.");
-    const rows=raw.map((x,i)=>({row_no:i+2,employee_no:firstVal(x,["رقم الموظف","الرقم الوظيفي","employee_no"]),employee_name:firstVal(x,["اسم الموظف","employee_name","name"]),transaction_no:firstVal(x,["رقم معاملة التعيين","رقم المعاملة","transaction_no"]),interruption_transaction_no:firstVal(x,["رقم معاملة الانقطاع أو اتخاذ الإجراء","رقم معاملة الانقطاع","interruption_transaction_no"]),region:firstVal(x,["الإقليم","الاقليم","المنطقة","region"]),start_date:normalizeDate(firstVal(x,["تاريخ المباشرة","start_date"]))}));
+    const md=await api("/api/managers?_="+Date.now()),managers=md.managers||[];const byName=new Map(),byUsername=new Map();for(const m of managers){byName.set(String(m.name||"").trim().toLowerCase(),m);byUsername.set(String(m.username||"").trim().toLowerCase(),m);}
+    const rows=raw.map((x,i)=>{const rv=firstVal(x,["المسؤول","اسم المسؤول","مسؤول المعاملة","responsible","responsible_username","اسم المستخدم المسؤول"]);const m=byName.get(rv.toLowerCase())||byUsername.get(rv.toLowerCase())||null;return {row_no:i+2,employee_no:firstVal(x,["رقم الموظف","الرقم الوظيفي","employee_no"]),employee_name:firstVal(x,["اسم الموظف","employee_name","name"]),transaction_no:firstVal(x,["رقم معاملة التعيين","رقم المعاملة","transaction_no"]),interruption_transaction_no:firstVal(x,["رقم معاملة الانقطاع أو اتخاذ الإجراء","رقم معاملة الانقطاع","interruption_transaction_no"]),responsible_user_id:m?.id||0,start_date:normalizeDate(firstVal(x,["تاريخ المباشرة","start_date"])),responsible_raw:rv};});
     const d=await api("/api/records/bulk",{method:"POST",body:JSON.stringify({rows})});
     msg.innerHTML=d.skipped?`<div class="importResult warn">تم إنشاء <b>${d.added}</b> ومعالجة <b>${d.skipped}</b> صفوف تحتاج تصحيح.<br>${esc((d.errors||[]).slice(0,8).map(x=>`صف ${x.row}: ${x.reason}`).join(" · "))}</div>`:`<div class="importResult ok">تم إنشاء ${d.added} معاملة بنجاح.</div>`;
   }catch(e){msg.innerHTML=`<div class="importResult err">${esc(e.message)}</div>`}
 }
 function impactMetric(label,value,total,color,percent=false){const n=Number(value||0),pct=percent?n:((Number(total||0)?Math.round(n/Number(total)*100):0));return `<div class="impactMetric"><div><span>${label}</span><b>${percent?pct+"%":n}</b></div><i class="${color}" style="width:${Math.min(100,pct)}%"></i></div>`}
 async function statsPage(managerId=""){
-  VIEW="stats";navActive("stats");title("تحليلات الأداء","قياس أثر المستخدمين بالوقت والنتائج، بعيداً عن عدد الإقليم.");
+  VIEW="stats";navActive("stats");title("تحليل الأداء","مؤشرات أداء مباشرة، مع مقارنة عادلة بين المستخدمين على نفس الفترة.");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
-    const selected=ME.role==="region"?String(ME.id):String(managerId||"0");
-    const qs=new URLSearchParams({manager_id:selected,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});
-    const [all,d]=await Promise.all([api("/api/stats-users?_="+Date.now()),api(`/api/manager-stats?${qs.toString()}`)]);
-    if(!d||!d.manager)throw Error("تعذر تجهيز بيانات تحليل الأداء. حاول تحديث الصفحة أو التحقق من صلاحية تحليل الأداء.");
-    const selectableUsers=(all?.users||[]).filter(x=>x.active&&["requester","region"].includes(x.role));
-    const userOptions=`<select class="statsUserSelect" onchange="statsPage(this.value)" aria-label="اختيار المستخدم"><option value="0" ${selected==="0"?"selected":""}>كل المستخدمين</option>${selectableUsers.map(m=>`<option value="${m.id}" ${Number(m.id)===Number(d.manager.id)?"selected":""}>${esc(m.name)} — ${esc(roleLabel[m.role]||m.role)}${m.region?` — ${esc(m.region)}`:""}</option>`).join("")}</select>`;
-    const roleText=d.manager.role==="region"?"مسؤول إقليم":d.manager.role==="requester"?"HR":"جميع المستخدمين";
-    const compareRows=(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)&&Number(d.manager.id)!==0?'current':''}">
-      <strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}${x.region?` · ${esc(x.region)}`:""}</small></strong>
-      <b>${x.documented}</b>
-      <b>${x.withdrawn}</b>
-      <b>${x.closed_after_delay||0}</b>
-      <b>${esc(x.avg_time_label||"—")}</b>
-      <b class="${x.sla_rate>=90?'goodText':x.sla_rate>=70?'warnText':'dangerText'}">${x.sla_rate}%</b>
-    </div>`).join("");
-    v.innerHTML=`<section class="section">
-      <div class="analysisToolbar">
-        <div><span class="eyebrow">PERFORMANCE INTELLIGENCE</span><h2>${esc(d.manager.name)}</h2><span class="analysisMeta">${esc(roleText)} · ${esc(d.manager.region||"")}</span></div>
-        ${userOptions}
-      </div>
-      <div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(d.filters.from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(d.filters.to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button><button class="soft" onclick="exportStats(${Number(d.manager.id)||0})">تصدير Excel</button></div>
-      <div class="statsGrid performanceKpis">
-        ${stat("إجمالي المعاملات",d.total,"blue")}
-        ${stat("تم التوثيق",d.documented,"green")}
-        ${stat("منسحب الموظف",d.withdrawn,"orange")}
-        ${stat("المعاملات المتأخرة",d.overdue,"red")}
-        ${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}
-      </div>
-      <div class="analysisComparisonNote"><b>منطقة المقارنة</b><span>المقارنة أدناه تقيس أداء HR ومسؤولي الأقاليم على نفس الفترة المختارة، مع إظهار التوثيق والانسحاب ومتوسط الزمن والالتزام، ويمكن اختيار مستخدم محدد من القائمة أعلاه.</span></div>
-      <div class="analysisGrid performancePanels">
-        <section class="chartCard"><div class="chartHead"><h3>الأثر الفعلي</h3><span>${d.total} معاملة</span></div><div class="impactMetrics">
-          ${impactMetric("نسبة التوثيق",d.quality.documentation_rate,"","green",true)}
-          ${impactMetric("نسبة الانسحاب",d.quality.withdrawal_rate,"","orange",true)}
-          ${impactMetric("الالتزام بالوقت",d.withinSlaRate,"","blue",true)}
-          ${impactMetric("متأخرة الآن",d.overdue,d.total,"red")}
-          <div class="impactMetric"><div><span>متوسط التأخير</span><b>${esc(d.avg_delay_label||"0 ثانية")}</b></div><i class="red" style="width:${Math.min(100,Number(d.avg_delay_seconds||0)/3600*10)}%"></i></div>
-        </div></section>
-        <section class="chartCard"><div class="chartHead"><h3>توزيع النتائج</h3><span>${d.total} معاملة</span></div>${(d.statusBreakdown||[]).filter(x=>!['returned','stopped','cancelled'].includes(x.key)).map(x=>analysisBar(x.label,x.value,d.total)).join("")||`<div class="chartEmpty">لا توجد بيانات</div>`}</section>
-      </div>
-      <section class="chartCard"><div class="chartHead"><h3>مقارنة أداء المستخدمين</h3><span>HR ومسؤولي الأقاليم · نفس الفترة</span></div><div class="performanceCompare">
-        <div class="performanceCompareHead"><span>المستخدم</span><span>التوثيق</span><span>الانسحاب</span><span>أُغلقت بعد التأخير</span><span>متوسط الزمن</span><span>الالتزام</span></div>
-        ${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}
-      </div></section>
-      <section class="chartCard"><div class="chartHead"><h3>المعاملات حسب الشهر</h3><span>آخر 12 شهر</span></div>${bars(d.recent)}</section>
-    </section>`;
-  }catch(e){
-    const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;
-    v.innerHTML=errorState(detail,"statsPage");
-  }
+    const from=localStorage.getItem("statsFrom")||"",to=localStorage.getItem("statsTo")||"";
+    const selected=ME.role==="responsible"?String(ME.id):String(managerId||"0");
+    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selected,from,to}).toString()}`);
+    if(!d?.manager)throw Error("تعذر تجهيز بيانات تحليل الأداء.");
+    const compareRows=(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)&&Number(d.manager.id)!==0?'current':''}"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></div>`).join("");
+    v.innerHTML=`<section class="section"><div class="analysisToolbar"><div><span class="eyebrow">PERFORMANCE ANALYSIS</span><h2>${esc(d.manager.name)}</h2><span class="analysisMeta">${from||"بداية الفترة"} — ${to||"نهاية الفترة"}</span></div></div><div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button><button class="soft" onclick="exportStats(${Number(d.manager.id)||0})">تصدير Excel</button></div><div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div><section class="chartCard performanceComparisonZone"><div class="chartHead"><div><h3>مقارنة أداء المستخدمين</h3><p>تتم المقارنة على نفس الفترة الزمنية المختارة أعلاه لضمان عدالة القياس.</p></div><span>${from||"—"} → ${to||"—"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة في الفترة المحددة</div>`}</div></section></section>`;
+  }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
+function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");statsPage(id);}
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
-function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");localStorage.setItem("statsRegion",document.querySelector("#statsRegion")?.value||"");statsPage(id);}
-async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||"",region:localStorage.getItem("statsRegion")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}
+async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}
 async function exportFromList(){try{const qs=new URLSearchParams({q:document.querySelector("#q")?.value||"",status:document.querySelector("#statusFilter")?.value||"",manager_id:document.querySelector("#managerFilter")?.value||"",from:document.querySelector("#fromFilter")?.value||"",to:document.querySelector("#toFilter")?.value||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تقرير_المعاملات");}catch(e){toast(e.message,"err");}}
 function downloadRows(rows,name){
  if(!rows.length){toast("لا توجد بيانات للتصدير","err");return;}
@@ -700,7 +657,7 @@ async function users(){
   try{
     const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
-    v.innerHTML=`<section class="section"><div class="sectionHead"><div><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الإقليم</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span>${esc(x.region||"—")}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
+    v.innerHTML=`<section class="section"><div class="sectionHead"><div><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
     <section class="section"><div class="sectionHead"><div><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active&&["requester","admin"].includes(x.role)).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
@@ -708,31 +665,17 @@ function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)re
 function userFormById(id){const x=usersCache.find(u=>Number(u.id)===Number(id));if(x)userForm(x);else toast("تعذر العثور على المستخدم","err");}
 function userForm(x={role:"requester",permissions:roleDefaults.requester}){
   const suggested=(x.id?((x.permissions&&x.permissions.length)?x.permissions:roleDefaults[x.role]||[]):(x.permissions&&x.permissions.length?x.permissions:roleDefaults[x.role]||[]));
-  const checks=permGroups.map(g=>`<div class="permGroup"><div class="permGroupHead"><h3>${g.title}</h3><button type="button" class="miniLink" onclick="togglePermGroup(this)">تحديد الكل</button></div>${g.items.map(k=>`<label class="check"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span><b>${permLabel[k]}</b><small>السماح بـ ${permLabel[k]}</small></span></label>`).join("")}</div>`).join("");
-  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr" onchange="applySuggestedPerms()"><option value="requester">HR</option><option value="supervisor">مشرف</option><option value="manager">مدير</option><option value="region">مسؤول إقليم</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label><label>الإقليم<select id="freg"><option value="">بدون إقليم</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
-  const fr=document.querySelector("#fr"),freg=document.querySelector("#freg"); fr.value=x.role||"requester";
-  api("/api/regions").then(d=>{if(freg){freg.innerHTML=`<option value="">بدون إقليم</option>${(d.regions||[]).map(r=>`<option ${String(r.name||r)===String(x.region||"")?"selected":""} value="${esc(r.name||r)}">${esc(r.name||r)}</option>`).join("")}`;freg.disabled=(fr.value!=="region");}});
-  const roleEl=document.querySelector("#fr");
-  if(roleEl){ roleEl.value=x.role||"requester"; roleEl.addEventListener("change",()=>{
-    applySuggestedPerms();
-    const freg=document.querySelector("#freg");
-    if(freg) freg.disabled=roleEl.value!=="region";
-    if(roleEl.value!=="region") freg.value="";
-    toast("تم تحديث الصلاحيات المقترحة حسب الدور");
-  }); }
-  const modal=document.querySelector(".userModal");
-  const head=modal?.querySelector(".permGrid");
-  if(head){ head.insertAdjacentHTML("beforebegin",`<div class="permSuggestion"><span><b>الصلاحيات المقترحة</b><small>يتم اقتراحها تلقائيًا حسب الدور ويمكن تعديلها قبل الحفظ.</small></span><button type="button" class="soft" onclick="applySuggestedPerms()">تطبيق المقترح</button></div>`); }
+  const checks=Object.entries(permLabel).map(([k,v])=>`<label class="permCheck"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span>${v}</span></label>`).join("");
+  document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="userModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><h2>${x.id?"تعديل المستخدم":"إنشاء مستخدم"}</h2><div class="formGrid"><label>اسم المستخدم<input id="fu" value="${esc(x.username||"")}" ${x.id?"readonly":""}></label><label>الاسم<input id="fn" value="${esc(x.name||"")}"></label><label>كلمة المرور<input id="fp" type="password" placeholder="${x.id?"اتركها فارغة دون تغيير":"مطلوبة"}"></label><label>الدور<select id="fr" onchange="applySuggestedPerms()"><option value="requester">HR</option><option value="supervisor">مشرف</option><option value="manager">مدير</option><option value="responsible">مسؤول</option><option value="viewer">مشاهد</option><option value="admin">مدير النظام</option></select></label></div><div class="permGrid">${checks}</div><div class="userFormActions"><button class="primary wide big" onclick="saveUser(${x.id||0})">حفظ التغييرات</button></div></div></div>`);
+  const roleEl=document.querySelector("#fr"); if(roleEl)roleEl.value=x.role||"requester";
 }
-function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); toast("تم تطبيق الصلاحيات المقترحة"); }
+function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); }
 async function saveUser(id){
-  const modal=document.querySelector(".userModal");
+  const modal=document.querySelector(".userModal"); if(!modal)return;
+  const username=modal.querySelector("#fu")?.value.trim()||"", name=modal.querySelector("#fn")?.value.trim()||"", password=modal.querySelector("#fp")?.value||"", role=modal.querySelector("#fr")?.value||"requester";
   const permissions=[...modal.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value);
-  const username=modal.querySelector("#fu")?.value.trim()||"", name=modal.querySelector("#fn")?.value.trim()||"", password=modal.querySelector("#fp")?.value||"", role=modal.querySelector("#fr")?.value||"requester", region=modal.querySelector("#freg")?.value||"";
-  if(role==="region"&&!region)return toast("اختر إقليم مسؤول الإقليم","err"); const b={name,role,region,permissions};if(password)b.password=password;
-  if(!id){b.username=username;if(!b.password)return toast("كلمة المرور مطلوبة للمستخدم الجديد","err");}
-  try{await api(id?`/api/users/${id}`:"/api/users",{method:"POST",body:JSON.stringify(b)});document.querySelector(".modalShade")?.remove();toast("تم حفظ المستخدم والصلاحيات");users();}
-  catch(e){toast(e.message,"err");}
+  if(!username||!name)return toast("أكمل اسم المستخدم والاسم","err");
+  try{const b={name,role,permissions};if(!id)b.username=username;if(password)b.password=password;if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});modal.remove();toast("تم حفظ المستخدم");users();}catch(e){toast(e.message,"err");}
 }
 async function clearTestData(){
   const ok=prompt("هذا الإجراء يحذف المعاملات والمستخدمين التجريبيين والجلسات والتفويضات. اكتب RESET للتأكيد:");
@@ -752,70 +695,6 @@ async function createDelegation(){
   try{await api("/api/delegations",{method:"POST",body:JSON.stringify({source_user_id:source,target_user_id:target,starts_at:document.querySelector("#delStart").value||null,ends_at:document.querySelector("#delEnd").value||null,note:document.querySelector("#delNote").value||""})});toast("تم تفعيل التفويض");users();}catch(e){toast(e.message,"err");}
 }
 async function revokeDelegation(id){try{await api(`/api/delegations/${id}`,{method:"POST",body:JSON.stringify({action:"revoke"})});toast("تم إلغاء التفويض");users();}catch(e){toast(e.message,"err");}}
-async function regions(){
-  if(!can("manage_regions")){toast("لا تملك صلاحية إدارة الأقاليم","err");return}
-  VIEW="regions";navActive("regions");title("الأقاليم","إدارة دورة حياة الأقاليم: نشط، مؤرشف، وإعادة تفعيل من نفس الشاشة.");
-  const v=document.querySelector("#view");
-  v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">REGION DIRECTORY</span><h2>دليل الأقاليم</h2><p class="sectionHint">الأرشفة لا تحذف الإقليم ولا سجله؛ يمكنك إعادة تفعيله من تبويب الأرشيف في أي وقت.</p></div><button class="primary" onclick="regionForm()">＋ إضافة إقليم</button></div><div class="regionTabs"><button class="regionTab active" data-region-tab="active" onclick="loadRegionsTab('active')">الأقاليم النشطة</button><button class="regionTab" data-region-tab="archived" onclick="loadRegionsTab('archived')">الأرشيف</button></div><div id="regionTable" class="regionTable"><div class="loading">جاري التحميل…</div></div></section>`;
-  await loadRegionsTab("active");
-}
-async function loadRegionsTab(tab="active"){
-  const table=document.querySelector("#regionTable");if(!table)return;
-  document.querySelectorAll(".regionTab").forEach(x=>x.classList.toggle("active",x.dataset.regionTab===tab));
-  table.innerHTML='<div class="loading">جاري تحميل الأقاليم…</div>';
-  try{
-    const d=await api(`/api/regions?include_inactive=1&_=${Date.now()}`);
-    const rows=(d.regions||[]).filter(r=>tab==="active"?Number(r.active)===1:Number(r.active)!==1);
-    const rowHtml=rows.map(r=>{
-      const n=esc(r.name), enc=encodeURIComponent(r.name||""), active=Number(r.active)===1;
-      const actions=active
-        ? `<button class="soft" onclick="regionForm(decodeURIComponent('${enc}'))">تعديل</button><button class="danger" onclick="archiveRegion(decodeURIComponent('${enc}'))">أرشفة</button>`
-        : `<button class="primary" onclick="reactivateRegion(decodeURIComponent('${enc}'))">إعادة تفعيل</button><button class="soft" onclick="regionForm(decodeURIComponent('${enc}'))">تعديل الاسم</button>`;
-      return `<div class="regionRow"><b>${n}</b><span class="userState ${active?'on':'off'}">${active?'نشط':'مؤرشف'}</span><small>${active?'—':esc(fmtDateTime(r.archived_at)||'—')}</small><div class="rowActions">${actions}</div></div>`;
-    }).join("");
-    const empty=tab==='active'?'لا توجد أقاليم نشطة. أضف إقليماً جديداً للبدء.':'لا توجد أقاليم مؤرشفة.';
-    table.innerHTML=`<div class="regionHead"><span>الإقليم</span><span>الحالة</span><span>آخر تحديث</span><span>إجراء</span></div>${rowHtml||`<div class="emptyRow">${empty}</div>`}`;
-  }catch(e){table.innerHTML=errorState(e?.status?`${e.message} · HTTP ${e.status}`:e.message);}
-}
-async function reactivateRegion(name){
-  try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:name})});apiCache.clear();regionsCache=null;toast("تمت إعادة تفعيل الإقليم");await loadRegionsTab("archived");}
-  catch(e){toast(e.message,"err");}
-}
-function regionForm(oldName=""){document.querySelector(".regionFormModal")?.remove();document.body.insertAdjacentHTML("beforeend",`<div class="modalShade regionFormModal"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION DIRECTORY · V${APP_VERSION}</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" maxlength="120" autocomplete="off" placeholder="مثال: المنطقة الشمالية"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);setTimeout(()=>document.querySelector("#regionName")?.focus(),50);} 
-async function saveRegion(oldName){
-  try{
-    const input=document.querySelector("#regionName");
-    const name=String(input?.value||"").trim();
-    if(!name)return toast("أدخل اسم الإقليم","err");
-    const payload=oldName?{action:"edit",old_name:String(oldName).trim(),name}:{action:"add",name};
-    await api("/api/regions",{method:"POST",body:JSON.stringify(payload)});
-    document.querySelector(".modalShade")?.remove();
-    apiCache.clear();regionsCache=null;
-    toast("تم حفظ الإقليم وتحديث جميع المعاملات المرتبطة به");
-    await regions();
-  }catch(e){toast(e?.status?`${e.message} · HTTP ${e.status}`:e.message,"err");}
-}
-async function toggleRegion(oldName){try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:oldName})});apiCache.clear();toast("تم تغيير حالة الإقليم");regions();}catch(e){toast(e.message,"err");}}
-async function archiveRegion(oldName){
-  try{
-    await api("/api/regions",{method:"POST",body:JSON.stringify({action:"delete",old_name:oldName})});
-    document.querySelector(".modalShade")?.remove();apiCache.clear();toast("تمت أرشفة الإقليم");regions();
-  }catch(e){
-    if(e?.status===400&&e?.data?.needs_replacement){
-      const active=e.data.active_records||0;
-      document.querySelector(".modalShade")?.remove();
-      const d=await api("/api/regions");
-      const opts=(d.regions||[]).filter(r=>r.name!==oldName&&r.active).map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join("");
-      document.body.insertAdjacentHTML("beforeend",`<div class="modalShade regionArchiveModal"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION ARCHIVE</span><h2>نقل المعاملات قبل الأرشفة</h2><p class="modalHint">الإقليم <b>${esc(oldName)}</b> لديه <b>${active}</b> معاملة نشطة. اختر الإقليم البديل لنقل المعاملات النشطة إليه، بينما تبقى المعاملات التاريخية مرتبطة بالإقليم المؤرشف.</p><label>الإقليم البديل<select id="archiveReplacement"><option value="">اختر الإقليم البديل</option>${opts}</select></label><div class="actionButtons"><button class="ghost" onclick="this.closest('.modalShade').remove()">إلغاء</button><button class="danger" onclick="confirmArchiveRegion(${JSON.stringify(oldName)})">نقل وأرشفة</button></div></div></div>`);
-      enhanceSelects(document.querySelector('.regionArchiveModal'));
-    }else toast(e.message,"err");
-  }
-}
-async function confirmArchiveRegion(oldName){
-  const replacement=document.querySelector('#archiveReplacement')?.value||'';
-  if(!replacement)return toast('اختر الإقليم البديل','err');
-  try{await api('/api/regions',{method:'POST',body:JSON.stringify({action:'delete',old_name:oldName,replacement_region:replacement})});document.querySelector('.regionArchiveModal')?.remove();apiCache.clear();toast('تم نقل المعاملات النشطة وأرشفة الإقليم');regions();}catch(e){toast(e.message,'err');}
-}
 async function auditPage(){
   if(!can("view_audit_log")){toast("لا تملك صلاحية سجل النشاط","err");return}
   VIEW="audit";navActive("audit");title("سجل النشاط","سجل تدقيق كامل قابل للبحث والتصفية والتصدير.");
@@ -825,7 +704,7 @@ async function loadAudit(){
   try{const qs=new URLSearchParams({q:document.querySelector("#auditQ")?.value||"",from:document.querySelector("#auditFrom")?.value||"",to:document.querySelector("#auditTo")?.value||""});const d=await api("/api/audit?"+qs);document.querySelector("#auditTable").innerHTML=`<div class="auditHead"><span>التاريخ</span><span>المستخدم</span><span>النشاط</span><span>المعاملة</span><span>التفاصيل</span></div>${(d.events||[]).map(e=>`<div class="auditRow"><small>${fmtDateTime(e.created_at)}</small><span>${esc(e.actor_name||"النظام")}</span><b>${esc(e.action)}</b><span>#${esc(e.record_id||"—")}</span><p>${esc(e.note||"—")}</p></div>`).join("")||`<div class="emptyRow">لا توجد نتائج</div>`}`;}catch(e){document.querySelector("#auditTable").innerHTML=errorState(e.message);}
 }
 async function exportAudit(){try{const d=await api("/api/audit/export");downloadRows(d.rows||[],"سجل_النشاط");}catch(e){toast(e.message,"err");}}
-async function refreshBadge(){if(ME?.role!=="region")return;try{const d=await api("/api/records?status=required");const b=document.querySelector("#reqBadge");if(b)b.textContent=d.records?.length||0;}catch{}}
+async function refreshBadge(){if(ME?.role!=="responsible")return;try{const d=await api("/api/records?status=required");const b=document.querySelector("#reqBadge");if(b)b.textContent=d.records?.length||0;}catch{}}
 async function logout(){try{await api("/api/logout")}finally{ME=null;login();}}
 document.addEventListener("pointerdown",e=>{
   const input=e.target.closest("input[type=date],input[type=datetime-local]");
@@ -834,7 +713,7 @@ document.addEventListener("pointerdown",e=>{
   const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
   if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
 });
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickRegion=quickRegion;window.quickRegionSubmit=quickRegionSubmit;window.quickRegionWithdraw=quickRegionWithdraw;window.quickRegionWithdrawSubmit=quickRegionWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.regions=regions;window.regionForm=regionForm;window.saveRegion=saveRegion;window.toggleRegion=toggleRegion;window.archiveRegion=archiveRegion;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
 boot();
 
 
