@@ -663,7 +663,7 @@ async function statsPage(managerId=""){
           ${impactMetric("نسبة الانسحاب",d.quality.withdrawal_rate,"","orange",true)}
           ${impactMetric("الالتزام بالوقت",d.withinSlaRate,"","blue",true)}
           ${impactMetric("متأخرة الآن",d.overdue,d.total,"red")}
-          ${impactMetric("متوسط التأخير",d.avg_delay_label,"","red",true)}
+          <div class="impactMetric"><div><span>متوسط التأخير</span><b>${esc(d.avg_delay_label||"0 ثانية")}</b></div><i class="red" style="width:${Math.min(100,Number(d.avg_delay_seconds||0)/3600*10)}%"></i></div>
         </div></section>
         <section class="chartCard"><div class="chartHead"><h3>توزيع النتائج</h3><span>${d.total} معاملة</span></div>${(d.statusBreakdown||[]).filter(x=>!['returned','stopped','cancelled'].includes(x.key)).map(x=>analysisBar(x.label,x.value,d.total)).join("")||`<div class="chartEmpty">لا توجد بيانات</div>`}</section>
       </div>
@@ -713,7 +713,8 @@ function userForm(x={role:"requester",permissions:roleDefaults.requester}){
     if(roleEl.value!=="region") freg.value="";
     toast("تم تحديث الصلاحيات المقترحة حسب الدور");
   }); }
-  const head=modal.querySelector(".permGrid");
+  const modal=document.querySelector(".userModal");
+  const head=modal?.querySelector(".permGrid");
   if(head){ head.insertAdjacentHTML("beforebegin",`<div class="permSuggestion"><span><b>الصلاحيات المقترحة</b><small>يتم اقتراحها تلقائيًا حسب الدور ويمكن تعديلها قبل الحفظ.</small></span><button type="button" class="soft" onclick="applySuggestedPerms()">تطبيق المقترح</button></div>`); }
 }
 function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); toast("تم تطبيق الصلاحيات المقترحة"); }

@@ -1,12 +1,8 @@
-# 1S.5.3
+# Version 19.1.0
 
-- External transaction cards: withdrawal and interruption/action transaction are displayed as two compact status badges in the same status area.
-- Performance analytics: user-level KPI dashboard and direct comparison table for regional managers.
-- Removed regional filter from performance analytics; manager selection is the primary dimension and the manager's region is shown beside the name.
-
-## V19.0.0 — Region & Performance Hardening
-- إصلاح شاشة تحليل الأداء وتحسين تحميل بياناتها وحالات الخطأ.
-- تحسين إدارة الأقاليم وإضافة دورة حياة واضحة: نشط / مؤرشف / إعادة تفعيل.
-- حفظ تاريخ الأرشفة والمستخدم الذي نفذها.
-- إعادة تفعيل الإقليم من الأرشيف، مع منع التعارض مع مسؤول إقليم نشط.
-- تحسين إضافة الإقليم بحيث تعيد تفعيل الاسم المؤرشف بدلاً من اعتباره مكرراً.
+- إصلاح تهيئة قاعدة البيانات بحيث لا تعتمد على رقم schema_meta وحده لإنشاء/ترقية جدول الأقاليم.
+- رفع إصدار مخطط قاعدة البيانات الداخلي إلى 20 لضمان تطبيق الترقية على قواعد البيانات التي كانت على V19.
+- تحسين إضافة الإقليم مع منع التكرار غير الحساس لحالة الأحرف ومعالجة أخطاء قاعدة البيانات بشكل واضح.
+- تنظيف كاش الأقاليم بعد الإضافة/التعديل لضمان ظهور الإقليم مباشرة.
+- إصلاح شاشة تحليل الأداء وتحسين عرض متوسط التأخير ومنع قيم CSS غير صالحة.
+- إصلاح خطأ JavaScript كامن في نموذج المستخدم كان قد يسبب ReferenceError عند فتح شاشة إدارة المستخدمين.
