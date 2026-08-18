@@ -131,7 +131,8 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[], regionsCache=null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const can = p => ME?.role==="admin" || ME?.permissions?.includes(p);
+const APP_VERSION="19.2.0";
+const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
   const s=String(x).slice(0,10);
@@ -240,7 +241,7 @@ function layout(u){
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="region"?"إقليمك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
-      <footer class="appFooter"><span>Contract Control</span><b>V18.1</b><span>نظام متابعة العقود</span></footer>
+      <footer class="appFooter"><span>Contract Control</span><b>V${APP_VERSION}</b><span>نظام متابعة العقود</span></footer>
     </main>
     <div class="mobileBar">
       <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
@@ -297,7 +298,7 @@ function activityPanel(items){
   return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">AUDIT STREAM</span><h2>آخر النشاطات</h2><p>الحركة الأخيرة على المعاملات في المركز.</p></div><button class="soft" onclick="auditPage()">السجل الكامل ←</button></div><div class="activityTable"><div class="activityHeader"><span>النشاط</span><span>المعاملة</span><span>المستخدم</span><span>التاريخ</span></div>${items.length?items.slice(0,8).map(e=>`<div class="activityRow"><span><i></i>${esc(e.action||"نشاط")}</span><b>#${esc(e.record_id||"—")} ${esc(e.employee_name||"")}</b><span>${esc(e.actor_name||"النظام")}</span><small>${fmtDateTime(e.created_at)}</small></div>`).join(""):`<div class="emptyRow">لا توجد نشاطات حديثة</div>`}</div></section>`;
 }
 function title(a,b=""){document.querySelector("#pageTitle").textContent=a;document.querySelector("#pageSub").textContent=b;}
-function errorState(msg){return `<div class="errorState"><div>!</div><h3>تعذر تحميل الشاشة</h3><p>${esc(msg)}</p><button class="primary" onclick="dash()">إعادة المحاولة</button></div>`;}
+function errorState(msg,retryFn="dash"){return `<div class="errorState"><div>!</div><h3>تعذر تحميل الشاشة</h3><p>${esc(msg||"حدث خطأ غير متوقع")}</p><button class="primary" onclick="${retryFn}()">إعادة المحاولة</button></div>`;}
 function emptyState(msg){return `<div class="emptyState"><span>⌁</span><b>${esc(msg)}</b></div>`;}
 async function list(mode=""){
   if(ME.role==="region" && !mode) mode="required";
@@ -673,7 +674,7 @@ async function statsPage(managerId=""){
       </div></section>
       <section class="chartCard"><div class="chartHead"><h3>المعاملات حسب الشهر</h3><span>آخر 12 شهر</span></div>${bars(d.recent)}</section>
     </section>`;
-  }catch(e){v.innerHTML=errorState(e.message);}
+  }catch(e){v.innerHTML=errorState(e.message,"statsPage");}
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
@@ -774,7 +775,7 @@ async function reactivateRegion(name){
   try{await api("/api/regions",{method:"POST",body:JSON.stringify({action:"toggle",old_name:name})});apiCache.clear();regionsCache=null;toast("تمت إعادة تفعيل الإقليم");await loadRegionsTab("archived");}
   catch(e){toast(e.message,"err");}
 }
-function regionForm(oldName=""){document.body.insertAdjacentHTML("beforeend",`<div class="modalShade"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" placeholder="اسم الإقليم"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);}
+function regionForm(oldName=""){document.querySelector(".regionFormModal")?.remove();document.body.insertAdjacentHTML("beforeend",`<div class="modalShade regionFormModal"><div class="smallModal"><button class="modalClose" onclick="this.closest('.modalShade').remove()">×</button><span class="eyebrow">REGION DIRECTORY · V${APP_VERSION}</span><h2>${oldName?"تعديل الإقليم":"إضافة إقليم"}</h2><input id="regionName" value="${esc(oldName)}" maxlength="120" autocomplete="off" placeholder="مثال: المنطقة الشمالية"><div class="actionButtons"><button class="primary" onclick="saveRegion(${JSON.stringify(oldName)})">حفظ</button>${oldName?`<button class="danger" onclick="archiveRegion(${JSON.stringify(oldName)})">أرشفة</button>`:""}</div></div></div>`);setTimeout(()=>document.querySelector("#regionName")?.focus(),50);} 
 async function saveRegion(oldName){
   try{
     const input=document.querySelector("#regionName");

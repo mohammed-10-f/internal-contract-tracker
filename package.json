@@ -1,7 +1,7 @@
 {
   "name": "internal-contract-tracker",
   "private": true,
-  "version": "14.1.0",
+  "version": "19.2.0",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"

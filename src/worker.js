@@ -86,7 +86,7 @@ function buildRegionManagerBuckets(records){
   return out;
 }
 
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=20;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=21;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
@@ -138,31 +138,68 @@ async function log(env,r,u,a,n=""){await env.DB.prepare("INSERT INTO audit_log(r
 async function regionUser(env,region){return await env.DB.prepare(`SELECT u.*,COUNT(r.id) AS active_load FROM users u LEFT JOIN records r ON r.region_user_id=u.id AND r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') WHERE u.role='region' AND u.active=1 AND u.region=? GROUP BY u.id ORDER BY active_load ASC,u.id ASC LIMIT 1`).bind(region).first()}
 function permsOf(u){if(!u)return [];if(u.role==="admin")return ALL_PERMS;return String(u.permissions||"").split(",").map(x=>x.trim()).filter(Boolean)}
 function allow(u,p){return !!(u&&(u.role==="admin"||permsOf(u).includes(p)))}
+function allowRoleFallback(u,p){if(!u)return false;if(allow(u,p))return true;const defaults=ROLE_DEFAULTS[u.role]||[];return !String(u.permissions||"").trim()&&defaults.includes(p)}
 async function ensureSchema(env){
  if(schemaReady) return schemaReady;
  schemaReady=(async()=>{
+   // The schema bootstrap is intentionally idempotent. A previous deployment may
+   // have written schema_meta before all ALTER TABLE statements completed.
+   // Therefore every request verifies the critical tables/columns instead of
+   // trusting the version marker alone.
    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`).run();
-   const meta=await env.DB.prepare(`SELECT value FROM schema_meta WHERE key='version'`).first();
-   // Core tables required by V19/V20 must always exist; do not rely solely on schema_meta.
-   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS regions(name TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,archived_at TEXT,archived_by INTEGER)`).run();
-   try{await env.DB.prepare("ALTER TABLE regions ADD COLUMN archived_at TEXT").run()}catch{}
-   try{await env.DB.prepare("ALTER TABLE regions ADD COLUMN archived_by INTEGER").run()}catch{}
-   if(Number(meta?.value||0) >= SCHEMA_VERSION) return;
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+     password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'viewer', region TEXT,
+     permissions TEXT DEFAULT '', active INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS records (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, employee_no TEXT NOT NULL, employee_name TEXT NOT NULL,
+     region TEXT NOT NULL, start_date TEXT NOT NULL, transaction_no TEXT, transaction_date TEXT,
+     interruption_transaction_no TEXT, end_date TEXT, status TEXT NOT NULL DEFAULT 'waiting_region',
+     requester_id INTEGER NOT NULL, region_user_id INTEGER, region_note TEXT, requester_note TEXT,
+     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, region_responded_at TEXT,
+     final_approved_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     timer_paused_at TEXT, timer_end_at TEXT, paused_seconds INTEGER NOT NULL DEFAULT 0,
+     stage_started_at TEXT, original_region_user_id INTEGER, delegated_from_user_id INTEGER,
+     delegated_at TEXT, stopped_at TEXT, stopped_by INTEGER, completed_at TEXT,
+     delegated_to_user_id INTEGER)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS audit_log (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER, user_id INTEGER,
+     action TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions (
+     token TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL,
+     login_at TEXT DEFAULT CURRENT_TIMESTAMP,last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+     logout_at TEXT,ip TEXT,user_agent TEXT)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS regions(
+     name TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,archived_at TEXT,archived_by INTEGER)`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS delegations_v2(
+     id INTEGER PRIMARY KEY AUTOINCREMENT,source_user_id INTEGER NOT NULL,target_user_id INTEGER NOT NULL,
+     starts_at TEXT,ends_at TEXT,active INTEGER NOT NULL DEFAULT 1,created_by INTEGER,
+     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,revoked_at TEXT,revoked_by INTEGER,note TEXT DEFAULT '')`).run();
+   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS record_stages(
+     id INTEGER PRIMARY KEY AUTOINCREMENT,record_id INTEGER NOT NULL,stage TEXT NOT NULL,
+     user_id INTEGER,started_at TEXT NOT NULL,ended_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+
    const adds=[
     ["users","permissions","TEXT DEFAULT ''"],
     ["records","transaction_no","TEXT"],["records","transaction_date","TEXT"],["records","interruption_transaction_no","TEXT"],["records","region_note","TEXT"],["records","requester_note","TEXT"],["records","region_responded_at","TEXT"],["records","final_approved_at","TEXT"],["records","updated_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["records","end_date","TEXT"],["records","original_region_user_id","INTEGER"],["records","delegated_from_user_id","INTEGER"],["records","delegated_at","TEXT"],["records","timer_paused_at","TEXT"],["records","timer_end_at","TEXT"],["records","paused_seconds","INTEGER DEFAULT 0"],["records","stage_started_at","TEXT"],["records","stopped_at","TEXT"],["records","stopped_by","INTEGER"],["records","completed_at","TEXT"],["records","delegated_to_user_id","INTEGER"],
-    ["sessions","login_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","last_seen_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","logout_at","TEXT"],["sessions","ip","TEXT"],["sessions","user_agent","TEXT"]
+    ["sessions","login_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","last_seen_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","logout_at","TEXT"],["sessions","ip","TEXT"],["sessions","user_agent","TEXT"],
+    ["regions","archived_at","TEXT"],["regions","archived_by","INTEGER"]
    ];
-   for(const [table,col,type] of adds){try{await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run()}catch{}}
-   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL,login_at TEXT DEFAULT CURRENT_TIMESTAMP,last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,logout_at TEXT,ip TEXT,user_agent TEXT)`).run();
-   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS delegations_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,source_user_id INTEGER NOT NULL,target_user_id INTEGER NOT NULL,starts_at TEXT,ends_at TEXT,active INTEGER NOT NULL DEFAULT 1,created_by INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,revoked_at TEXT,revoked_by INTEGER,note TEXT DEFAULT '')`).run();
-   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS record_stages(id INTEGER PRIMARY KEY AUTOINCREMENT,record_id INTEGER NOT NULL,stage TEXT NOT NULL,user_id INTEGER,started_at TEXT NOT NULL,ended_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+   for(const [table,col,type] of adds){try{await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run()}catch{} }
+
    for(const name of DEFAULT_REGIONS) await env.DB.prepare("INSERT OR IGNORE INTO regions(name,active) VALUES(?,1)").bind(name).run();
-   const existing=await env.DB.prepare("SELECT DISTINCT region FROM users WHERE region IS NOT NULL AND TRIM(region)<>''").all();
-   for(const x of existing.results) await env.DB.prepare("INSERT OR IGNORE INTO regions(name,active) VALUES(?,1)").bind(x.region).run();
-   for(const [role,perms] of Object.entries(ROLE_DEFAULTS)) { try { await env.DB.prepare("UPDATE users SET permissions=? WHERE role=? AND (permissions IS NULL OR permissions='')").bind(perms.join(","),role).run(); } catch {} }
-   try { await env.DB.prepare("UPDATE records SET original_region_user_id=region_user_id WHERE original_region_user_id IS NULL").run(); } catch {}
-   try { await env.DB.prepare("UPDATE records SET updated_at=COALESCE(updated_at,created_at)").run(); } catch {}
+   try{
+     const existing=await env.DB.prepare("SELECT DISTINCT region FROM users WHERE region IS NOT NULL AND TRIM(region)<>''").all();
+     for(const x of existing.results||[]) await env.DB.prepare("INSERT OR IGNORE INTO regions(name,active) VALUES(?,1)").bind(String(x.region).trim()).run();
+   }catch{}
+   // Repair permission data from older releases without overwriting deliberate custom permissions.
+   for(const [role,perms] of Object.entries(ROLE_DEFAULTS)){
+     try{await env.DB.prepare("UPDATE users SET permissions=? WHERE role=? AND (permissions IS NULL OR TRIM(permissions)='')").bind(perms.join(","),role).run()}catch{}
+   }
+   try{await env.DB.prepare("UPDATE records SET original_region_user_id=region_user_id WHERE original_region_user_id IS NULL AND region_user_id IS NOT NULL").run()}catch{}
+   try{await env.DB.prepare("UPDATE records SET updated_at=COALESCE(updated_at,created_at)").run()}catch{}
    const indexes=[
     "CREATE INDEX IF NOT EXISTS idx_sessions_token_expires ON sessions(token,expires_at)",
     "CREATE INDEX IF NOT EXISTS idx_users_username_active ON users(username,active)",
@@ -177,7 +214,7 @@ async function ensureSchema(env){
     "CREATE INDEX IF NOT EXISTS idx_delegations_source_active ON delegations_v2(source_user_id,active,starts_at,ends_at)",
     "CREATE INDEX IF NOT EXISTS idx_delegations_target_active ON delegations_v2(target_user_id,active,starts_at,ends_at)"
    ];
-   for(const sql of indexes){try{await env.DB.prepare(sql).run()}catch{}}
+   for(const sql of indexes){try{await env.DB.prepare(sql).run()}catch{} }
    await env.DB.prepare("INSERT INTO schema_meta(key,value) VALUES('version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(String(SCHEMA_VERSION)).run();
  })().catch(e=>{schemaReady=null;throw e});
  return schemaReady;
@@ -248,6 +285,7 @@ function roleFilterRequired(u){return u.role==="region"?"r.status IN ('waiting_r
 export default {async fetch(req,env){
  await ensureSchema(env); const url=new URL(req.url),p=url.pathname; const u=await user(req,env);
  if(p==="/api/me")return json({user:u?{id:u.id,name:u.name,username:u.username,role:u.role,region:u.region,permissions:permsOf(u)}:null});
+ if(p==="/api/health"&&req.method==="GET"){try{const v=await env.DB.prepare("SELECT value FROM schema_meta WHERE key='version'").first();const r=await env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) active FROM regions").first();return json({ok:true,version:Number(v?.value||0),regions:{total:Number(r?.c||0),active:Number(r?.active||0)},user:u?{id:u.id,role:u.role,permissions:permsOf(u)}:null});}catch(e){return json({ok:false,error:String(e?.message||e)},500)}}
  if(p==="/api/setup"&&req.method==="POST"){const c=await env.DB.prepare("SELECT COUNT(*) c FROM users").first();if(Number(c.c))return json({error:"تمت التهيئة مسبقاً"},400);const b=await req.json(),h=await hash(String(b.password||"1234"));await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES('admin',?,?, 'admin',?,1)").bind(b.name||"المدير",h,ALL_PERMS.join(",")).run();return json({ok:true})}
  if(p==="/api/login"&&req.method==="POST"){const b=await req.json(),username=String(b.username||"").trim(),x=await env.DB.prepare("SELECT * FROM users WHERE username=? AND active=1").bind(username).first();if(!x||x.password_hash!==await hash(String(b.password||""))){await log(env,null,null,"محاولة دخول فاشلة",`اسم المستخدم: ${username}`);return json({error:"بيانات الدخول غير صحيحة"},401)}const t=token(),exp=Math.floor(Date.now()/1000)+DAYS*86400;await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at,login_at,last_seen_at,ip,user_agent) VALUES(?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)").bind(t,x.id,exp,clientIp(req),req.headers.get("User-Agent")||"—").run();await log(env,null,x.id,"تسجيل دخول",`IP: ${clientIp(req)}`);return json({ok:true},200,{"set-cookie":`${COOKIE}=${t}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${DAYS*86400}`})}
  if(p==="/api/logout"){const t=cookie(req);if(t){const s=await env.DB.prepare("SELECT user_id FROM sessions WHERE token=?").bind(t).first();if(s)await log(env,null,s.user_id,"تسجيل خروج",`IP: ${clientIp(req)}`);await env.DB.prepare("UPDATE sessions SET logout_at=CURRENT_TIMESTAMP,last_seen_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run();await env.DB.prepare("DELETE FROM sessions WHERE token=?").bind(t).run()}return json({ok:true},200,{"set-cookie":`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`})}
@@ -312,14 +350,14 @@ export default {async fetch(req,env){
   if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='region'?"(r.region_user_id=? OR r.original_region_user_id=?)":"r.requester_id=?"}`,a.push(...(u.role==='region'?[u.id,u.id]:[u.id]));else if(s==="approval")sql+=" AND r.status IN ('region_documented','region_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled','stopped')";else if(s==="overdue"){}else if(s)sql+=" AND r.status=?",a.push(s);
   const countSql=sql; const countArgs=a.slice(); sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset); const [countRow,rows]=await env.DB.batch([env.DB.prepare(`SELECT COUNT(*) c FROM (${countSql})`).bind(...countArgs),env.DB.prepare(sql).bind(...a)]); let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit,total_count:Number(countRow.results?.[0]?.c||0)})
  }
- if(p==="/api/managers"&&req.method==="GET"){if(!allow(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
+ if(p==="/api/managers"&&req.method==="GET"){if(!allowRoleFallback(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
  if(p==="/api/regions"&&req.method==="GET"){
-  const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");
+  const all=url.searchParams.get("include_inactive")==="1"&&allowRoleFallback(u,"manage_regions");
   const rows=await env.DB.prepare(`SELECT name,active,created_at,archived_at,archived_by FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name COLLATE NOCASE`).all();
   return json({regions:rows.results,active_count:rows.results.filter(x=>Number(x.active)===1).length,archived_count:rows.results.filter(x=>Number(x.active)!==1).length});
  }
  if(p==="/api/regions"&&req.method==="POST"){
-  if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);
+  if(!allowRoleFallback(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);
   const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();
   if(action==="add"){
     if(!name)return json({error:"أدخل اسم الإقليم"},400);
@@ -528,7 +566,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
   const payload={total:Number(summary?.total||0),required:Number(summary?.required||0),documented:Number(summary?.documented||0),withdrawn:Number(summary?.withdrawn||0),stopped:Number(summary?.stopped||0),overdue:Number(summary?.overdue||0),inprog:Number(summary?.inprog||0),managers,recent_activity:activity.results,sla_hours:SLA_HOURS,report_date:reportDate()}; dashboardCache.set(cacheKey,{at:Date.now(),data:payload}); return json(payload);
  }
  if(p==="/api/manager-stats"&&req.method==="GET"){
-  if(!allow(u,"view_stats")&&u.role!=="region")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
+  if(!allowRoleFallback(u,"view_stats")&&u.role!=="region")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
   const requested=Number(url.searchParams.get("manager_id")||0),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
   const managerId=u.role==="region"?u.id:requested;
   if(u.role==="region" && managerId!==u.id)return json({error:"غير مصرح"},403);
@@ -541,7 +579,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
     args=[managerId];
   }else{
     if(u.role==="region")return json({error:"لا يمكن لمسؤول الإقليم عرض تحليل شامل للمستخدمين"},403);
-    if(!allow(u,"view_stats"))return json({error:"ليس لديك صلاحية التحليل الشامل"},403);
+    if(!allowRoleFallback(u,"view_stats"))return json({error:"ليس لديك صلاحية التحليل الشامل"},403);
     manager={id:0,name:"كل المستخدمين",username:"",role:"all",region:"كل المستخدمين"};
   }
   if(from){where+=(where?" AND":" WHERE")+" created_at>=?";args.push(from+" 00:00:00")}
@@ -624,7 +662,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
   });
  }
  if(p==="/api/stats-users"&&req.method==="GET"){
-  if(!allow(u,"view_stats"))return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
+  if(!allowRoleFallback(u,"view_stats"))return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
   if(u.role==="region")return json({users:[{id:u.id,name:u.name,username:u.username,role:u.role,region:u.region,active:u.active}]});
   const rows=await env.DB.prepare("SELECT id,username,name,role,region,active FROM users WHERE active=1 AND role IN ('requester','region') ORDER BY role,name").all();
   return json({users:rows.results});
