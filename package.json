@@ -1,12 +1,10 @@
 {
   "name": "internal-contract-tracker",
   "private": true,
-  "version": "19.2.0",
+  "version": "19.2.1",
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
-  },
-  "devDependencies": {
-    "wrangler": "^4.31.0"
+    "check": "node --check src/worker.js && node --check public/app.js",
+    "dev": "echo \"Cloudflare Workers local development requires Wrangler. Install it locally with your approved package registry, then run: wrangler dev\"",
+    "deploy": "echo \"Deployment is controlled by Cloudflare Workers using wrangler.toml. Set the Cloudflare Deploy Command to the platform's Wrangler deployment command; do not use bun run deploy.\""
   }
 }
