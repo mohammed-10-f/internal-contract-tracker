@@ -188,6 +188,19 @@ async function ensureXLSX(){
   });
   return window.__xlsxPromise;
 }
+async function ensureExcelJS(){
+  if(window.ExcelJS)return window.ExcelJS;
+  if(window.__exceljsPromise)return window.__exceljsPromise;
+  window.__exceljsPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+    script.async=true;
+    script.onload=()=>window.ExcelJS?resolve(window.ExcelJS):reject(new Error("منشئ Excel غير متاح"));
+    script.onerror=()=>reject(new Error("تعذر تحميل منشئ نموذج Excel. تحقق من الاتصال ثم أعد المحاولة."));
+    document.head.appendChild(script);
+  });
+  return window.__exceljsPromise;
+}
 function toast(message,type="ok"){
   document.querySelector(".toast")?.remove();
   document.body.insertAdjacentHTML("beforeend",`<div class="toast ${type}"><span>${type==="err"?"!":"✓"}</span><b>${esc(message)}</b></div>`);
@@ -269,35 +282,31 @@ async function boot(){try{const d=await api("/api/me");ME=d.user;if(ME){layout(M
 let idleGuard=null;
 function startIdleGuard(){clearInterval(idleGuard);idleGuard=setInterval(async()=>{if(!ME)return;try{const d=await api("/api/me",{cacheBust:Date.now()});if(!d.user){clearInterval(idleGuard);ME=null;toast("انتهت الجلسة بسبب عدم النشاط لمدة 30 دقيقة","err");login();}}catch(e){if(String(e.message).includes("غير مصرح")){clearInterval(idleGuard);ME=null;login();}}},60000)}
 async function dash(){
-  VIEW="home";navActive("home");title("الرئيسية",ME?.role==="responsible"?"ملخص أدائك خلال آخر 7 أيام":"مركز القيادة والمتابعة");
+  VIEW="home";navActive("home");title("مركز القيادة","مساحة تشغيلية يومية لاتخاذ القرار ومتابعة العمل — منفصلة عن تحليل الأداء.");
   const view=document.querySelector("#view"); view.innerHTML=`<div class="loading">جاري تجهيز مركز القيادة…</div>`;
   try{
     const d=await api("/api/dashboard");
     const done=(d.documented||0)+(d.withdrawn||0);
     const pct=d.total?Math.round(done/d.total*100):0;
-    const heroTitle=ME.role==="responsible"?`مرحباً ${esc(ME.name)}`:"مركز القيادة";
-    view.innerHTML=`<section class="commandHero"><div class="heroCopy"><span>LIVE CONTROL</span><h2>${heroTitle}</h2><p>${ME.role==="responsible"?"صورة مختصرة عن معاملات مسؤولك خلال آخر أسبوع، وما يحتاج تدخلك الآن.":"نظرة تنفيذية على حجم العمل، الاختناقات، الأداء، وآخر حركة في النظام."}</p><div class="heroActions">${can("upload_contracts")?`<button class="heroBtn" onclick="add()">＋ معاملة جديدة</button>`:""}<button class="heroGhost" onclick="list()">استعراض المعاملات ←</button></div></div><div class="heroMetric"><small>نسبة الإنجاز</small><strong>${pct}%</strong><div><i style="width:${pct}%"></i></div><span>${done} من ${d.total||0} منجزة</span></div></section>
-    <div class="statsGrid">${stat("إجمالي المعاملات",d.total||0,"blue")}${stat(ME.role==="responsible"?"مطلوب منك":"تحتاج إجراء",d.required||0,"orange")}${stat("منجز نهائياً",done,"green")}${stat("متأخر",d.overdue||0,"red",d.overdue?"يتطلب تدخلاً":"ضمن SLA")}</div>
-    ${ME.role==="responsible"?responsibleHome(d):adminHome(d)}
-    ${ME.role==="admin"?activityPanel(d.recent_activity||[]):""}`;
+    const required=d.required||0, overdue=d.overdue||0, active=d.inprog||0;
+    const heroTitle=ME.role==="responsible"?`مرحباً ${esc(ME.name)}`:`مرحباً ${esc(ME.name)}`;
+    const roleHint=ME.role==="responsible"?"هذه مساحتك التشغيلية لمتابعة ما يحتاج منك إجراء الآن.":"نظرة عملية على سير العمل، الأولويات، والتنبيهات اليومية دون خلطها مع تحليل الأداء.";
+    view.innerHTML=`<section class="commandCenterPro">
+      <div class="ccHero"><div class="ccHeroCopy"><span class="eyebrow ccEyebrow">COMMAND CENTER</span><h2>${heroTitle}</h2><p>${roleHint}</p><div class="ccQuickActions">${can("upload_contracts")?`<button class="ccPrimary" onclick="add()"><span>＋</span> معاملة جديدة</button>`:""}<button class="ccSecondary" onclick="list(${ME.role==="responsible"?"'required'":"''"})">استعراض المعاملات <span>←</span></button>${can("view_stats")?`<button class="ccSecondary" onclick="statsPage()">تحليل الأداء <span>↗</span></button>`:""}</div></div><div class="ccProgress"><div class="ccProgressTop"><span>الإغلاق التشغيلي</span><b>${pct}%</b></div><div class="ccProgressBar"><i style="width:${pct}%"></i></div><small>${done} معاملة مكتملة من أصل ${d.total||0}</small></div></div>
+      <div class="ccMetricGrid">
+        <button class="ccMetric" onclick="list(${ME.role==="responsible"?"'required'":"''"})"><span class="ccMetricIcon blue">◷</span><span><small>تحتاج إجراء</small><strong>${required}</strong><em>${ME.role==="responsible"?"مطلوب منك الآن":"ضمن قائمة العمل"}</em></span></button>
+        <button class="ccMetric" onclick="list('')"><span class="ccMetricIcon navy">▦</span><span><small>معاملات نشطة</small><strong>${active}</strong><em>قيد المتابعة</em></span></button>
+        <button class="ccMetric" onclick="list('overdue')"><span class="ccMetricIcon red">!</span><span><small>تحتاج تدخل</small><strong>${overdue}</strong><em>${overdue?"يوجد تأخير يحتاج متابعة":"لا يوجد تأخير حاليًا"}</em></span></button>
+        <button class="ccMetric" onclick="list('closed')"><span class="ccMetricIcon green">✓</span><span><small>مكتملة</small><strong>${done}</strong><em>تم توثيقها أو إنهاؤها</em></span></button>
+      </div>
+      <div class="ccGrid">
+        <section class="ccPanel ccPriority"><div class="ccPanelHead"><div><span class="eyebrow">PRIORITY QUEUE</span><h3>الأولوية الآن</h3><p>${ME.role==="responsible"?"المعاملات التي تحتاج إفادتك مباشرة.":"أهم المؤشرات التشغيلية التي تستحق المتابعة الآن."}</p></div><button class="ccLink" onclick="list(${ME.role==="responsible"?"'required'":"''"})">فتح القائمة ←</button></div><div class="ccPriorityList"><div><span class="priorityDot red"></span><div><b>المعاملات المتأخرة</b><small>راجع الحالات التي تجاوزت مدة الخدمة.</small></div><strong>${overdue}</strong></div><div><span class="priorityDot orange"></span><div><b>${ME.role==="responsible"?"بانتظار إفادتك":"تحتاج إجراء"}</b><small>${ME.role==="responsible"?"ابدأ بالحالات المطلوبة منك.":"حالات تحتاج متابعة أو قرار."}</small></div><strong>${required}</strong></div><div><span class="priorityDot green"></span><div><b>العمل المكتمل</b><small>حالات وصلت إلى نتيجة نهائية.</small></div><strong>${done}</strong></div></div></section>
+        <section class="ccPanel"><div class="ccPanelHead"><div><span class="eyebrow">WORK SNAPSHOT</span><h3>لقطة العمل</h3><p>توزيع سريع للحالات الحالية.</p></div></div><div class="ccSnapshot"><div><span>نشطة</span><b>${active}</b></div><div><span>مطلوب إجراء</span><b>${required}</b></div><div><span>موقوفة</span><b>${d.stopped||0}</b></div><div><span>مكتملة</span><b>${done}</b></div></div></section>
+      </div>
+      ${d.recent_activity?.length?activityPanel(d.recent_activity):""}
+    </section>`;
     startLiveTimers();
   }catch(e){view.innerHTML=errorState(e.message);}
-}
-function responsibleHome(d){
-  const pct=d.total?Math.round(((d.documented||0)+(d.withdrawn||0))/d.total*100):0;
-  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">RESPONSIBLE PULSE</span><h2>نبض المسؤول</h2><p>المؤشرات التي تحتاجها لاتخاذ القرار بسرعة.</p></div><button class="soft" onclick="statsPage()">تحليل أدائي ←</button></div><div class="responsiblePulse"><div class="pulseMain"><small>المعاملات النشطة</small><strong>${d.inprog||0}</strong><span>منها ${d.required||0} مطلوب منك الآن</span><div class="progress"><i style="width:${Math.min(100,Math.round((d.required||0)/Math.max(1,d.inprog||1)*100))}%"></i></div></div><div class="pulseList"><div><span>مطلوب إفادة</span><b>${d.required||0}</b></div><div><span>بانتظار الاعتماد</span><b>${(d.inprog||0)-(d.required||0)-(d.stopped||0)<0?0:(d.inprog||0)-(d.required||0)-(d.stopped||0)}</b></div><div><span>موقوف</span><b class="dangerText">${d.stopped||0}</b></div><div><span>متأخر</span><b class="dangerText">${d.overdue||0}</b></div></div></div></section>`;
-}
-function adminHome(d){
-  const managers=d.managers||[];
-  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">MANAGER PERFORMANCE</span><h2>أداء المسؤولين</h2><p>المؤشرات مصممة لتحديد الاختناق قبل أن يصبح تأخيراً.</p></div><button class="soft" onclick="statsPage()">فتح التحليل الكامل ←</button></div><div class="managerGrid">${managers.map((m,i)=>managerCard(m,i)).join("")||emptyState("لا يوجد مسؤولون نشطون")}</div></section>`;
-}
-function managerCard(m,i){
-  const total=Number(m.total||0), req=Number(m.required||0), done=Number(m.completed||0), stop=Number(m.stopped||0);
-  const pct=total?Math.round(done/total*100):0;
-  return `<article class="managerCard"><div class="managerTop"><div class="rankBadge">${i+1}</div><div class="avatar">${esc(m.name?.[0]||"م")}</div><div class="managerIdentity"><h3>${esc(m.name)}</h3><span>${esc(roleLabel["responsible"]||"مسؤول")}</span></div><button class="iconBtn" onclick="statsPage(${m.id})">↗</button></div><div class="managerNumbers"><div><small>نشطة</small><b>${total}</b></div><div><small>مطلوب منه</small><b class="orangeText">${req}</b></div><div><small>موقوفة</small><b class="dangerText">${stop}</b></div></div><div class="progress"><i style="width:${pct}%"></i></div><div class="managerBottom"><span>${pct}% إنجاز</span><button class="textBtn" onclick="statsPage(${m.id})">تفاصيل الأداء</button></div></article>`;
-}
-function activityPanel(items){
-  return `<section class="section"><div class="sectionHead"><div><span class="eyebrow">AUDIT STREAM</span><h2>آخر النشاطات</h2><p>الحركة الأخيرة على المعاملات في المركز.</p></div><button class="soft" onclick="auditPage()">السجل الكامل ←</button></div><div class="activityTable"><div class="activityHeader"><span>النشاط</span><span>المعاملة</span><span>المستخدم</span><span>التاريخ</span></div>${items.length?items.slice(0,8).map(e=>`<div class="activityRow"><span><i></i>${esc(e.action||"نشاط")}</span><b>#${esc(e.record_id||"—")} ${esc(e.employee_name||"")}</b><span>${esc(e.actor_name||"النظام")}</span><small>${fmtDateTime(e.created_at)}</small></div>`).join(""):`<div class="emptyRow">لا توجد نشاطات حديثة</div>`}</div></section>`;
 }
 function title(a,b=""){document.querySelector("#pageTitle").textContent=a;document.querySelector("#pageSub").textContent=b;}
 function errorState(msg,retryFn="dash"){return `<div class="errorState"><div>!</div><h3>تعذر تحميل الشاشة</h3><p>${esc(msg||"حدث خطأ غير متوقع")}</p><button class="primary" onclick="${retryFn}()">إعادة المحاولة</button></div>`;}
@@ -355,12 +364,12 @@ function recordCard(r){
   const status=statusLabel[r.status]||r.status||"—";
   const waitingAt=(r.status==="waiting_responsible"||r.status==="returned")?(r.responsible_user_name||"المسؤول"):"";
   const primary=canResponsible
-    ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickResponsible(${r.id})">إفادة</button>`
+    ? `<button class="v3-action primaryAction" onclick="quickResponsible(${r.id})">إفادة</button>`
     : canApprove
-      ? `<button class="v3-action primaryAction" onclick="event.stopPropagation();quickApprove(${r.id},'${r.status}')">اعتماد</button>`
-      : `<button class="v3-action ghostAction" onclick="event.stopPropagation();openRecord(${r.id})">تفاصيل</button>`;
+      ? `<button class="v3-action primaryAction" onclick="quickApprove(${r.id},'${r.status}')">اعتماد</button>`
+      : "";
 
-  return `<div class="v3-case-row" data-record-id="${r.id}" onclick="openRecord(${r.id})">
+  return `<div class="v3-case-row" data-record-id="${r.id}">
     <div class="v3-case-identity">
       <span class="v3-case-number">#${r.id}</span>
       <div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")}</small></div>
@@ -374,7 +383,7 @@ function recordCard(r){
           ? `<span class="v3-status is-pending">بانتظار الإفادة</span><span class="v3-status is-pending v3-waiting-user">متوقف عند: ${esc(waitingAt)}</span>`
           : `<span class="v3-status ${finished?'is-done':r.status==='responsible_withdrawn'?'is-danger':'is-pending'}">${esc(status)}</span>`}
     </div>
-    <div class="v3-case-action">${primary}<button class="v3-open" aria-label="فتح">↗</button></div>
+    <div class="v3-case-action">${primary}<button class="v3-action detailsAction" onclick="openRecord(${r.id})">التفاصيل</button><button class="v3-open" onclick="openRecord(${r.id})" aria-label="فتح التفاصيل" title="فتح التفاصيل">↗</button></div>
   </div>`;
 }
 async function quickResponsible(id){
@@ -603,7 +612,7 @@ function startLiveTimers(){
 async function uploadPage(){
   navActive("upload"); VIEW="upload"; title("رفع المعاملات","مركز إدخال موحد — كل معاملة ترتبط مباشرة بمسؤول محدد.");
   const v=document.querySelector("#view");
-  v.innerHTML=`<section class="section uploadWorkspace"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INTAKE</span><h2>مركز رفع المعاملات</h2><p>الإسناد يتم مباشرة إلى المستخدم المسؤول، بدون أي كيان وسيط.</p></div><a class="soft" href="/contract_upload_template.xlsx" download="نموذج_رفع_المعاملات.xlsx">↓ تحميل نموذج Excel</a></div><div class="intakeHub"><section class="intakeCard singleCard"><div class="intakeCardHead"><span class="intakeNumber">01</span><div><span class="eyebrow">SINGLE INTAKE</span><h3>معاملة واحدة</h3><p>اختر المسؤول مباشرة قبل الإنشاء.</p></div></div><div class="formGrid intakeForm"><label>رقم الموظف<input id="en" placeholder="مثال: 10245"></label><label>اسم الموظف<input id="nm" placeholder="اسم الموظف"></label><label>رقم معاملة التعيين<input id="tn" placeholder="رقم المعاملة"></label><label>المسؤول<select id="responsibleUser"></select></label><label>تاريخ المباشرة<input id="sd" type="date"></label></div><button class="primary big wide" onclick="save()">إنشاء المعاملة</button><p id="msg" class="formMessage"></p></section><section class="intakeCard bulkCard"><div class="intakeCardHead"><span class="intakeNumber">02</span><div><span class="eyebrow">BULK IMPORT</span><h3>رفع جماعي</h3><p>فحص الصفوف وربط كل صف بمسؤول مباشر.</p></div></div><div class="dropzone" id="dropzone"><div class="uploadGlyph">↑</div><h3>اسحب ملف Excel هنا</h3><p>XLSX · XLSM · XLS · CSV</p><span class="dropHint">أو اضغط لاختيار الملف</span><input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls,.csv"></div><div class="bulkActions"><div><b>فحص آمن قبل الإنشاء</b><span>كل صف يجب أن يحتوي اسم/حساب مسؤول صالح.</span></div><button class="primary big" onclick="importFile()">فحص الملف وإنشاء المعاملات</button></div><div id="importMsg"></div></section></div></section>`;
+  v.innerHTML=`<section class="section uploadWorkspace"><div class="sectionHead"><div><span class="eyebrow">TRANSACTION INTAKE</span><h2>مركز رفع المعاملات</h2><p>الإسناد يتم مباشرة إلى المستخدم المسؤول، بدون أي كيان وسيط.</p></div><button class="soft" onclick="downloadUploadTemplate()">↓ تحميل نموذج Excel</button></div><div class="intakeHub"><section class="intakeCard singleCard"><div class="intakeCardHead"><span class="intakeNumber">01</span><div><span class="eyebrow">SINGLE INTAKE</span><h3>معاملة واحدة</h3><p>اختر المسؤول مباشرة قبل الإنشاء.</p></div></div><div class="formGrid intakeForm"><label>رقم الموظف<input id="en" placeholder="مثال: 10245"></label><label>اسم الموظف<input id="nm" placeholder="اسم الموظف"></label><label>رقم معاملة التعيين<input id="tn" placeholder="رقم المعاملة"></label><label>المسؤول<select id="responsibleUser"></select></label><label>تاريخ المباشرة<input id="sd" type="date"></label></div><button class="primary big wide" onclick="save()">إنشاء المعاملة</button><p id="msg" class="formMessage"></p></section><section class="intakeCard bulkCard"><div class="intakeCardHead"><span class="intakeNumber">02</span><div><span class="eyebrow">BULK IMPORT</span><h3>رفع جماعي</h3><p>فحص الصفوف وربط كل صف بمسؤول مباشر.</p></div></div><div class="dropzone" id="dropzone"><div class="uploadGlyph">↑</div><h3>اسحب ملف Excel هنا</h3><p>XLSX · XLSM · XLS · CSV</p><span class="dropHint">أو اضغط لاختيار الملف</span><input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls,.csv"></div><div class="bulkActions"><div><b>فحص آمن قبل الإنشاء</b><span>كل صف يجب أن يحتوي اسم/حساب مسؤول صالح.</span></div><button class="primary big" onclick="importFile()">فحص الملف وإنشاء المعاملات</button></div><div id="importMsg"></div></section></div></section>`;
   try{const d=await api("/api/managers?_="+Date.now());const rg=document.querySelector("#responsibleUser");if(rg)rg.innerHTML=`<option value="">اختر المسؤول</option>`+(d.managers||[]).map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(m.username)}</option>`).join("");}catch(e){const rg=document.querySelector("#responsibleUser");if(rg)rg.innerHTML=`<option value="">تعذر تحميل المسؤولين</option>`;}
   const dz=document.querySelector("#dropzone"),fi=document.querySelector("#fileInput"); dz.onclick=e=>{if(e.target!==fi)fi.click()};
   ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag")})); ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("drag")}));
@@ -617,11 +626,38 @@ async function save(){
 }
 function firstVal(row,keys){for(const k of keys)if(row[k]!=null&&String(row[k]).trim()!=="")return String(row[k]).trim();return ""}
 function normalizeDate(v){if(!v)return "";const s=String(v).trim();if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:s;}
+async function downloadUploadTemplate(){
+  try{
+    const [ExcelJS,md]=await Promise.all([ensureExcelJS(),api("/api/managers?_="+Date.now())]);
+    const managers=md.managers||[];
+    if(!managers.length)throw Error("لا يوجد مستخدمون نشطون بدور مسؤول. أنشئ مسؤولًا أولًا ثم حمّل النموذج.");
+    const wb=new ExcelJS.Workbook();
+    wb.creator="Contract Control";wb.created=new Date();
+    const ws=wb.addWorksheet("رفع المعاملات");
+    const listWs=wb.addWorksheet("المسؤولون");listWs.state="veryHidden";
+    const headers=["رقم الموظف","اسم الموظف","رقم معاملة التعيين","المسؤول","تاريخ المباشرة"];
+    ws.addRow(headers);
+    ws.getRow(1).height=30;
+    ws.columns=[{width:18},{width:28},{width:24},{width:28},{width:18}];
+    headers.forEach((h,i)=>{const c=ws.getRow(1).getCell(i+1);c.font={name:"Arial",bold:true,color:{argb:"FFFFFFFF"}};c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"0E1C30"}};c.alignment={horizontal:"center",vertical:"middle"};c.border={bottom:{style:"thin",color:{argb:"D9E2EC"}}};});
+    managers.forEach(m=>listWs.addRow([m.name]));
+    for(let r=2;r<=1000;r++){
+      ws.getCell(r,4).dataValidation={type:"list",allowBlank:false,formulae:[`'المسؤولون'!$A$2:$A$${managers.length+1}`],showErrorMessage:true,errorTitle:"مسؤول غير صالح",error:"اختر المسؤول من القائمة المنسدلة."};
+      ws.getCell(r,5).numFmt="yyyy-mm-dd";
+    }
+    ws.views=[{state:"frozen",ySplit:1}];ws.autoFilter={from:"A1",to:"E1000"};
+    ws.addRow([]);ws.addRow(["تعليمات الاستخدام"]);ws.addRow(["اختر المسؤول من القائمة المنسدلة. القائمة تحتوي جميع المستخدمين النشطين الذين دورهم مسؤول وقت تنزيل النموذج."]);ws.addRow(["لا يوجد في النموذج رقم معاملة الانقطاع أو اتخاذ الإجراء؛ يضاف فقط عند تسجيل حالة منسحب الموظف من داخل المعاملة."]);
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`نموذج_رفع_المعاملات_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    toast(`تم إنشاء نموذج Excel وقائمة المسؤولين (${managers.length})`);
+  }catch(e){toast(e.message||"تعذر إنشاء نموذج Excel","err");}
+}
 async function importFile(){
   const file=document.querySelector("#fileInput")?.files?.[0],msg=document.querySelector("#importMsg");if(!file){toast("اختر ملف Excel أولاً","err");return;}
   try{msg.innerHTML=`<div class="loadingMini">جاري تجهيز محرك Excel وفحص ${esc(file.name)}…</div>`;const XLSX=await ensureXLSX();const wb=XLSX.read(await file.arrayBuffer(),{cellDates:true,raw:false});const sheet=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(sheet,{defval:"",raw:false});if(!raw.length)throw Error("الملف فارغ.");
     const md=await api("/api/managers?_="+Date.now()),managers=md.managers||[];const byName=new Map(),byUsername=new Map();for(const m of managers){byName.set(String(m.name||"").trim().toLowerCase(),m);byUsername.set(String(m.username||"").trim().toLowerCase(),m);}
-    const rows=raw.map((x,i)=>{const rv=firstVal(x,["المسؤول","اسم المسؤول","مسؤول المعاملة","responsible","responsible_username","اسم المستخدم المسؤول"]);const m=byName.get(rv.toLowerCase())||byUsername.get(rv.toLowerCase())||null;return {row_no:i+2,employee_no:firstVal(x,["رقم الموظف","الرقم الوظيفي","employee_no"]),employee_name:firstVal(x,["اسم الموظف","employee_name","name"]),transaction_no:firstVal(x,["رقم معاملة التعيين","رقم المعاملة","transaction_no"]),interruption_transaction_no:firstVal(x,["رقم معاملة الانقطاع أو اتخاذ الإجراء","رقم معاملة الانقطاع","interruption_transaction_no"]),responsible_user_id:m?.id||0,start_date:normalizeDate(firstVal(x,["تاريخ المباشرة","start_date"])),responsible_raw:rv};});
+    const rows=raw.map((x,i)=>{const rv=firstVal(x,["المسؤول","اسم المسؤول","مسؤول المعاملة","responsible","responsible_username","اسم المستخدم المسؤول"]);const m=byName.get(rv.toLowerCase())||byUsername.get(rv.toLowerCase())||null;return {row_no:i+2,employee_no:firstVal(x,["رقم الموظف","الرقم الوظيفي","employee_no"]),employee_name:firstVal(x,["اسم الموظف","employee_name","name"]),transaction_no:firstVal(x,["رقم معاملة التعيين","رقم المعاملة","transaction_no"]),responsible_user_id:m?.id||0,start_date:normalizeDate(firstVal(x,["تاريخ المباشرة","start_date"])),responsible_raw:rv};});
     const d=await api("/api/records/bulk",{method:"POST",body:JSON.stringify({rows})});
     msg.innerHTML=d.skipped?`<div class="importResult warn">تم إنشاء <b>${d.added}</b> ومعالجة <b>${d.skipped}</b> صفوف تحتاج تصحيح.<br>${esc((d.errors||[]).slice(0,8).map(x=>`صف ${x.row}: ${x.reason}`).join(" · "))}</div>`:`<div class="importResult ok">تم إنشاء ${d.added} معاملة بنجاح.</div>`;
   }catch(e){msg.innerHTML=`<div class="importResult err">${esc(e.message)}</div>`}
@@ -658,7 +694,7 @@ async function users(){
     const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
     v.innerHTML=`<section class="section"><div class="sectionHead"><div><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
-    <section class="section"><div class="sectionHead"><div><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active&&["requester","admin"].includes(x.role)).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
+    <section class="section"><div class="sectionHead"><div><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
 function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)return;const boxes=[...group.querySelectorAll("input[name=perm]")];const all=boxes.length&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
@@ -713,7 +749,7 @@ document.addEventListener("pointerdown",e=>{
   const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
   if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
 });
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
 boot();
 
 

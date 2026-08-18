@@ -268,7 +268,7 @@ export default {async fetch(req,env){
    const source=await env.DB.prepare("SELECT * FROM users WHERE id=? AND active=1").bind(sourceId).first();
    const target=await env.DB.prepare("SELECT * FROM users WHERE id=? AND active=1").bind(targetId).first();
    if(!source||!target)return json({error:"المستخدم المصدر أو المفوض إليه غير موجود"},400);
-   if(!["requester","admin"].includes(source.role))return json({error:"التفويض متاح لحسابات HR أو المدير فقط"},400);
+   if(!source.active)return json({error:"المفوِّض غير نشط"},400);
    await env.DB.prepare("UPDATE delegations_v2 SET active=0,revoked_at=CURRENT_TIMESTAMP,revoked_by=? WHERE source_user_id=? AND active=1").bind(u.id,sourceId).run();
    const d=await env.DB.prepare(`INSERT INTO delegations_v2(source_user_id,target_user_id,starts_at,ends_at,active,created_by,note) VALUES(?,?,?,?,1,?,?) RETURNING id`).bind(sourceId,targetId,b.starts_at||nowIso(),b.ends_at||null,u.id,b.note||"").first();
    if(!b.starts_at || parseTs(b.starts_at)<=Date.now()) await env.DB.prepare(`UPDATE records SET delegated_to_user_id=? WHERE requester_id=? AND status NOT IN ('final_documented','final_withdrawn','cancelled')`).bind(targetId,sourceId).run();
@@ -312,7 +312,7 @@ export default {async fetch(req,env){
   if(to){sql+=" AND r.created_at<=?";a.push(to+" 23:59:59")}
   if(!["admin","manager","supervisor","viewer"].includes(u.role) && !canSeeClosed(u))sql+=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled')";
   if(q){sql+=" AND (r.employee_no LIKE ? OR r.employee_name LIKE ? OR r.transaction_no LIKE ? OR r.interruption_transaction_no LIKE ?)";const z="%"+q+"%";a.push(z,z,z,z)}
-  if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='responsible'?"(r.responsible_user_id=? OR r.original_responsible_user_id=?)":"r.requester_id=?"}`,a.push(...(u.role==='responsible'?[u.id,u.id]:[u.id]));else if(s==="approval")sql+=" AND r.status IN ('responsible_documented','responsible_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled','stopped')";else if(s==="overdue"){}else if(s)sql+=" AND r.status=?",a.push(s);
+  if(s==="required")sql+=` AND ${roleFilterRequired(u)}`;else if(s==="mine")sql+=` AND ${u.role==='responsible'?"(r.responsible_user_id=? OR r.original_responsible_user_id=?)":"r.requester_id=?"}`,a.push(...(u.role==='responsible'?[u.id,u.id]:[u.id]));else if(s==="approval")sql+=" AND r.status IN ('responsible_documented','responsible_withdrawn')";else if(s==="closed")sql+=" AND r.status IN ('final_documented','final_withdrawn','cancelled','stopped')";else if(s==="overdue")sql+=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(r.created_at))*86400>=?",a.push(SLA_HOURS*3600);else if(s)sql+=" AND r.status=?",a.push(s);
   const countSql=sql; const countArgs=a.slice(); sql+=" ORDER BY r.id DESC LIMIT ? OFFSET ?";a.push(limit+1,offset); const [countRow,rows]=await env.DB.batch([env.DB.prepare(`SELECT COUNT(*) c FROM (${countSql})`).bind(...countArgs),env.DB.prepare(sql).bind(...a)]); let out=rows.results.map(withMeta);let hasMore=out.length>limit;if(hasMore)out=out.slice(0,limit);if(s==="overdue")out=out.filter(x=>x.overdue);return json({records:out,has_more:hasMore,offset,limit,total_count:Number(countRow.results?.[0]?.c||0)})
  }
  if(p==="/api/managers"&&req.method==="GET"){if(!allowRoleFallback(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username FROM users WHERE role='responsible' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
@@ -409,7 +409,8 @@ return json({record:withMeta(r),events:ev.results,stages})}
  }
  if(p==="/api/dashboard"){
   await syncDelegations(env);
-  if(!allow(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية عرض الإحصائيات"},403);
+  // مركز القيادة متاح لجميع المستخدمين المسجلين. تحليل الأداء يبقى منفصلًا بصلاحية view_stats.
+
   const cacheKey=`${u.id}:${u.role}`; const cached=dashboardCache.get(cacheKey); if(cached && Date.now()-cached.at<5000) return json(cached.data);
 
   const responsibleOnly=u.role==="responsible";
@@ -433,7 +434,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
     FROM users u LEFT JOIN records r ON r.responsible_user_id=u.id AND r.created_at>=datetime('now','-6 day')
     WHERE u.role='responsible' AND u.active=1`;
   const ma=[]; if(responsibleOnly){sql+=" AND u.id=?";ma.push(u.id)} sql+=" GROUP BY u.id ORDER BY required DESC,total DESC";
-  const managers=(await env.DB.prepare(sql).bind(...ma).all()).results;
+  const managers=(allowRoleFallback(u,"view_stats")||u.role==="responsible")?(await env.DB.prepare(sql).bind(...ma).all()).results:[];
   const activitySql=responsibleOnly?`SELECT a.*,u.name actor_name,r.employee_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN records r ON r.id=a.record_id WHERE r.responsible_user_id=? ORDER BY a.id DESC LIMIT 10`:`SELECT a.*,u.name actor_name,r.employee_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN records r ON r.id=a.record_id WHERE a.record_id IS NOT NULL ORDER BY a.id DESC LIMIT 10`;
   const activity=await env.DB.prepare(activitySql).bind(...(responsibleOnly?[u.id]:[])).all();
   const payload={total:Number(summary?.total||0),required:Number(summary?.required||0),documented:Number(summary?.documented||0),withdrawn:Number(summary?.withdrawn||0),stopped:Number(summary?.stopped||0),overdue:Number(summary?.overdue||0),inprog:Number(summary?.inprog||0),managers,recent_activity:activity.results,sla_hours:SLA_HOURS,report_date:reportDate()}; dashboardCache.set(cacheKey,{at:Date.now(),data:payload}); return json(payload);
