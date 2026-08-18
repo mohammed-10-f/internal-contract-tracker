@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS records (
  region TEXT NOT NULL,
  start_date TEXT NOT NULL,
  transaction_no TEXT,
+ transaction_date TEXT,
  interruption_transaction_no TEXT,
  end_date TEXT,
  status TEXT NOT NULL DEFAULT 'waiting_region',

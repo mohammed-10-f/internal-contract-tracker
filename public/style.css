@@ -1127,3 +1127,19 @@ select{
   .hNode{width:34px!important;height:34px!important;font-size:12px!important}
   .hLine{min-width:8px!important;margin-top:16px!important}
 }
+
+/* Agreed UX refinements — scoped only to requested features */
+.analysisComparisonNote{display:flex;gap:12px;align-items:flex-start;margin:14px 0;padding:13px 15px;border:1px solid var(--line);border-radius:12px;background:var(--slate-50);color:var(--slate-600);font-size:10.5px;line-height:1.8}
+.analysisComparisonNote b{color:var(--ink-800);white-space:nowrap}
+.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(180px,1.4fr) repeat(5,minmax(90px,1fr));display:grid;align-items:center;gap:10px}
+.performanceCompareHead{padding:11px 12px;background:var(--slate-50);border-bottom:1px solid var(--line);font-size:9px;color:var(--slate-500);font-weight:700}
+.performanceCompareRow{padding:12px;border-bottom:1px solid #edf1f6;font-size:12px}
+.copyValue{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.recordInlineDetails{width:100%;margin:0 0 10px;border:1px solid var(--line);border-radius:0 0 var(--r-lg) var(--r-lg);background:var(--canvas);overflow:hidden;box-shadow:var(--sh-xs)}
+.recordInlineDetails .recordSheet{width:100%;height:auto;max-height:none;background:transparent;overflow:visible;padding:18px 20px 26px;box-shadow:none;position:relative}
+.recordInlineDetails .v4-close{position:absolute;left:14px;top:14px;width:auto;height:32px;padding:0 10px;font-size:10px;z-index:3}
+.v4-reactivate-form{margin-top:12px;padding:14px;border:1px solid var(--accent-100);border-radius:var(--r-md);background:var(--accent-50)}
+.v4-reactivate-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.v4-reactivate-fields label span{display:block;font-size:9px;font-weight:700;color:var(--slate-600);margin-bottom:5px}
+.v4-reactivate-fields input,.v4-reactivate-fields select{width:100%;background:#fff}
+@media(max-width:760px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(5,minmax(82px,1fr));min-width:700px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}

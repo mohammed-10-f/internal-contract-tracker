@@ -86,14 +86,14 @@ function buildRegionManagerBuckets(records){
   return out;
 }
 
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=16;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=17;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
 const CLOSED=["final_documented","final_withdrawn","cancelled"];
 const labels={
  waiting_region:"بانتظار إفادة مسؤول الإقليم",
- returned:"مرتجع للتصحيح",
+ returned:"↩ معاد للإقليم",
  region_documented:"تمت الإفادة — بانتظار مراجعة HR",
  region_withdrawn:"تمت الإفادة بالانسحاب — بانتظار مراجعة HR",
  final_documented:"تم التوثيق",
@@ -146,7 +146,7 @@ async function ensureSchema(env){
    if(Number(meta?.value||0) >= SCHEMA_VERSION) return;
    const adds=[
     ["users","permissions","TEXT DEFAULT ''"],
-    ["records","transaction_no","TEXT"],["records","interruption_transaction_no","TEXT"],["records","region_note","TEXT"],["records","requester_note","TEXT"],["records","region_responded_at","TEXT"],["records","final_approved_at","TEXT"],["records","updated_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["records","end_date","TEXT"],["records","original_region_user_id","INTEGER"],["records","delegated_from_user_id","INTEGER"],["records","delegated_at","TEXT"],["records","timer_paused_at","TEXT"],["records","timer_end_at","TEXT"],["records","paused_seconds","INTEGER DEFAULT 0"],["records","stage_started_at","TEXT"],["records","stopped_at","TEXT"],["records","stopped_by","INTEGER"],["records","completed_at","TEXT"],["records","delegated_to_user_id","INTEGER"],
+    ["records","transaction_no","TEXT"],["records","transaction_date","TEXT"],["records","interruption_transaction_no","TEXT"],["records","region_note","TEXT"],["records","requester_note","TEXT"],["records","region_responded_at","TEXT"],["records","final_approved_at","TEXT"],["records","updated_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["records","end_date","TEXT"],["records","original_region_user_id","INTEGER"],["records","delegated_from_user_id","INTEGER"],["records","delegated_at","TEXT"],["records","timer_paused_at","TEXT"],["records","timer_end_at","TEXT"],["records","paused_seconds","INTEGER DEFAULT 0"],["records","stage_started_at","TEXT"],["records","stopped_at","TEXT"],["records","stopped_by","INTEGER"],["records","completed_at","TEXT"],["records","delegated_to_user_id","INTEGER"],
     ["sessions","login_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","last_seen_at","TEXT DEFAULT CURRENT_TIMESTAMP"],["sessions","logout_at","TEXT"],["sessions","ip","TEXT"],["sessions","user_agent","TEXT"]
    ];
    for(const [table,col,type] of adds){try{await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run()}catch{}}
@@ -311,30 +311,73 @@ export default {async fetch(req,env){
  }
  if(p==="/api/managers"&&req.method==="GET"){if(!allow(u,"view_stats")&&!allow(u,"reassign_records"))return json({error:"غير مصرح"},403);const rows=await env.DB.prepare("SELECT id,name,username,region FROM users WHERE role='region' AND active=1 ORDER BY name").all();return json({managers:rows.results})}
  if(p==="/api/regions"&&req.method==="GET"){const all=url.searchParams.get("include_inactive")==="1"&&allow(u,"manage_regions");const rows=await env.DB.prepare(`SELECT name,active,created_at FROM regions ${all?"":"WHERE active=1"} ORDER BY active DESC,name`).all();return json({regions:rows.results})}
- if(p==="/api/regions"&&req.method==="POST"){if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();if(action==="add"){if(!name)return json({error:"أدخل اسم الإقليم"},400);try{await env.DB.prepare("INSERT INTO regions(name,active) VALUES(?,1)").bind(name).run()}catch{return json({error:"الإقليم موجود مسبقاً"},400)}await log(env,null,u.id,"إضافة إقليم",name);return json({ok:true})}const oldName=String(b.old_name||"").trim();if(!oldName)return json({error:"الإقليم غير محدد"},400);if(action==="edit"){
+ if(p==="/api/regions"&&req.method==="POST"){
+  if(!allow(u,"manage_regions"))return json({error:"ليس لديك صلاحية إدارة الأقاليم"},403);
+  const b=await req.json(),action=String(b.action||"add"),name=String(b.name||"").trim();
+  if(action==="add"){
+    if(!name)return json({error:"أدخل اسم الإقليم"},400);
+    try{await env.DB.prepare("INSERT INTO regions(name,active) VALUES(?,1)").bind(name).run()}catch{return json({error:"الإقليم موجود مسبقاً"},400)}
+    await log(env,null,u.id,"إضافة إقليم",name);return json({ok:true});
+  }
+  const oldName=String(b.old_name||"").trim();if(!oldName)return json({error:"الإقليم غير محدد"},400);
+  const source=await env.DB.prepare("SELECT name,active FROM regions WHERE name=?").bind(oldName).first();
+  if(!source)return json({error:"الإقليم غير موجود"},404);
+  if(action==="edit"){
     if(!name)return json({error:"أدخل اسم الإقليم الجديد"},400);
     if(name===oldName)return json({ok:true});
-    const targetExists=await env.DB.prepare("SELECT 1 FROM regions WHERE name=? LIMIT 1").bind(name).first();
-    if(targetExists)return json({error:"اسم الإقليم مستخدم مسبقاً"},400);
-    const sourceExists=await env.DB.prepare("SELECT 1 FROM regions WHERE name=? LIMIT 1").bind(oldName).first();
-    if(!sourceExists)return json({error:"الإقليم غير موجود"},404);
+    if(await env.DB.prepare("SELECT 1 FROM regions WHERE name=? LIMIT 1").bind(name).first())return json({error:"اسم الإقليم مستخدم مسبقاً"},400);
     try{
       await env.DB.prepare("UPDATE users SET region=? WHERE region=?").bind(name,oldName).run();
-      await env.DB.prepare("UPDATE records SET region=? WHERE region=?").bind(name,oldName).run();
+      await env.DB.prepare("UPDATE records SET region=?,updated_at=CURRENT_TIMESTAMP WHERE region=?").bind(name,oldName).run();
       await env.DB.prepare("UPDATE regions SET name=? WHERE name=?").bind(name,oldName).run();
       dashboardCache.clear();
     }catch(e){return json({error:`تعذر حفظ تعديل الإقليم: ${e?.message||"خطأ غير معروف"}`},400)}
-    await log(env,null,u.id,"تعديل إقليم",`${oldName} → ${name}`);
-    return json({ok:true});
-  }if(action==="toggle"){const current=await env.DB.prepare("SELECT active FROM regions WHERE name=?").bind(oldName).first();if(!current)return json({error:"الإقليم غير موجود"},404);if(Number(current.active)===1){if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"انقل أو عطّل مسؤول الإقليم أولاً قبل تعطيل الإقليم"},400);}await env.DB.prepare("UPDATE regions SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE name=?").bind(oldName).run();await log(env,null,u.id,"تغيير حالة إقليم",oldName);return json({ok:true})}if(action==="delete"){if(!await env.DB.prepare("SELECT 1 FROM regions WHERE name=? AND active=1").bind(oldName).first())return json({error:"الإقليم غير موجود"},404);if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"لا يمكن حذف الإقليم قبل نقل أو تعطيل مسؤول الإقليم المرتبط به"},400);await env.DB.prepare("UPDATE regions SET active=0 WHERE name=?").bind(oldName).run();await log(env,null,u.id,"حذف/أرشفة إقليم",oldName);return json({ok:true})}return json({error:"إجراء غير معروف"},400)}
+    await log(env,null,u.id,"تعديل إقليم",`${oldName} → ${name}`);return json({ok:true});
+  }
+  if(action==="delete"){
+    if(Number(source.active)!==1)return json({error:"الإقليم مؤرشف بالفعل"},400);
+    const activeUser=await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first();
+    if(activeUser)return json({error:"لا يمكن أرشفة الإقليم لوجود موظف/مسؤول نشط مرتبط به. انقله أو عطّله أولاً."},400);
+    const activeCount=await env.DB.prepare("SELECT COUNT(*) c FROM records WHERE region=? AND status NOT IN ('final_documented','final_withdrawn','cancelled','stopped')").bind(oldName).first();
+    const count=Number(activeCount?.c||0);
+    if(count>0){
+      const replacement=String(b.replacement_region||"").trim();
+      if(!replacement)return json({needs_replacement:true,active_records:count,error:`يوجد ${count} معاملة نشطة مرتبطة بالإقليم. اختر إقليمًا بديلاً لنقلها.`},400);
+      if(replacement===oldName)return json({error:"اختر إقليمًا بديلاً مختلفًا"},400);
+      const target=await env.DB.prepare("SELECT name,active FROM regions WHERE name=?").bind(replacement).first();
+      if(!target||Number(target.active)!==1)return json({error:"الإقليم البديل غير موجود أو مؤرشف"},400);
+      const targetManager=await regionUser(env,replacement);
+      if(!targetManager)return json({error:"الإقليم البديل لا يوجد له مسؤول نشط"},400);
+      const activeRecords=(await env.DB.prepare("SELECT id FROM records WHERE region=? AND status NOT IN ('final_documented','final_withdrawn','cancelled','stopped')").bind(oldName).all()).results;
+      await env.DB.prepare("UPDATE records SET region=?,region_user_id=?,updated_at=CURRENT_TIMESTAMP WHERE region=? AND status NOT IN ('final_documented','final_withdrawn','cancelled','stopped')").bind(replacement,targetManager.id,oldName).run();
+      for(const rec of activeRecords){
+        await log(env,rec.id,u.id,"أرشفة الإقليم ونقل المعاملة",`${oldName} → ${replacement} — أُسندت إلى ${targetManager.name}`);
+      }
+    }
+    await env.DB.prepare("UPDATE regions SET active=0 WHERE name=?").bind(oldName).run();
+    dashboardCache.clear();
+    await log(env,null,u.id,"أرشفة إقليم",`${oldName}${count?` — نقل ${count} معاملة نشطة إلى ${String(b.replacement_region).trim()}`:""}`);
+    return json({ok:true,moved:count});
+  }
+  if(action==="toggle"){
+    const current=await env.DB.prepare("SELECT active FROM regions WHERE name=?").bind(oldName).first();
+    if(!current)return json({error:"الإقليم غير موجود"},404);
+    if(Number(current.active)===1){
+      if(await env.DB.prepare("SELECT 1 FROM users WHERE role='region' AND active=1 AND region=? LIMIT 1").bind(oldName).first())return json({error:"انقل أو عطّل مسؤول الإقليم أولاً قبل تعطيل الإقليم"},400);
+    }
+    await env.DB.prepare("UPDATE regions SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE name=?").bind(oldName).run();
+    await log(env,null,u.id,"تغيير حالة إقليم",oldName);return json({ok:true});
+  }
+  return json({error:"إجراء غير معروف"},400);
+ }
  if(p==="/api/records"&&req.method==="POST"){if(!allow(u,"upload_contracts"))return json({error:"ليس لديك صلاحية رفع المعاملات"},403);const b=await req.json();if(!b.employee_no||!b.employee_name||!b.region||!b.start_date||!b.transaction_no)return json({error:"أكمل رقم الموظف والاسم والإقليم وتاريخ المباشرة ورقم معاملة التعيين"},400);const ru=await regionUser(env,b.region);if(!ru)return json({error:"لا يوجد مسؤول إقليم نشط مرتبط بهذا الإقليم"},400);const delegation=await currentDelegation(env,u.id);
-const r=await env.DB.prepare(`INSERT INTO records(employee_no,employee_name,region,start_date,transaction_no,status,requester_id,region_user_id,original_region_user_id,delegated_to_user_id,stage_started_at,updated_at) VALUES(?,?,?,?,?,'waiting_region',?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`).bind(b.employee_no.trim(),b.employee_name.trim(),b.region,b.start_date,b.transaction_no.trim(),u.id,ru.id,ru.id,delegation?.target_user_id||null).first();
+const r=await env.DB.prepare(`INSERT INTO records(employee_no,employee_name,region,start_date,transaction_no,transaction_date,status,requester_id,region_user_id,original_region_user_id,delegated_to_user_id,stage_started_at,updated_at) VALUES(?,?,?,?,?,?,?, ?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`).bind(b.employee_no.trim(),b.employee_name.trim(),b.region,b.start_date,b.transaction_no.trim(),b.transaction_date||b.start_date,'waiting_region',u.id,ru.id,ru.id,delegation?.target_user_id||null).first();
 await stageStart(env,r.id,"region",ru.id);
 dashboardCache.clear();
 await log(env,r.id,u.id,"إنشاء المعاملة",`أُسندت إلى ${ru.name}${delegation?` — والمفوض الحالي: ${delegation.target_name}`:""}`);
 return json({ok:true,id:r.id})}
  if(p==="/api/records/bulk"&&req.method==="POST"){if(!allow(u,"upload_contracts"))return json({error:"ليس لديك صلاحية الرفع الجماعي"},403);const b=await req.json(),rows=Array.isArray(b.rows)?b.rows:[];let added=0,errors=[];for(const x of rows){if(!x.employee_no&&!x.employee_name&&!x.region)continue;if(!x.employee_no||!x.employee_name||!x.region||!x.start_date||!x.transaction_no){errors.push({row:x.row_no||"?",reason:"بيانات أساسية ناقصة"});continue}const ru=await regionUser(env,x.region);if(!ru){errors.push({row:x.row_no,reason:"لا يوجد مسؤول نشط لهذا الإقليم"});continue}try{const delegation=await currentDelegation(env,u.id);
-const r=await env.DB.prepare(`INSERT INTO records(employee_no,employee_name,region,start_date,transaction_no,interruption_transaction_no,status,requester_id,region_user_id,original_region_user_id,delegated_to_user_id,stage_started_at,updated_at) VALUES(?,?,?,?,?,?,'waiting_region',?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`).bind(x.employee_no.trim(),x.employee_name.trim(),x.region,x.start_date,x.transaction_no.trim(),null,u.id,ru.id,ru.id,delegation?.target_user_id||null).first();
+const r=await env.DB.prepare(`INSERT INTO records(employee_no,employee_name,region,start_date,transaction_no,transaction_date,interruption_transaction_no,status,requester_id,region_user_id,original_region_user_id,delegated_to_user_id,stage_started_at,updated_at) VALUES(?,?,?,?,?,?,?,'waiting_region',?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`).bind(x.employee_no.trim(),x.employee_name.trim(),x.region,x.start_date,x.transaction_no.trim(),x.start_date,null,u.id,ru.id,ru.id,delegation?.target_user_id||null).first();
 await stageStart(env,r.id,"region",ru.id);
 await log(env,r.id,u.id,"إنشاء المعاملة من رفع جماعي",`أُسندت إلى ${ru.name}${delegation?` — والمفوض الحالي: ${delegation.target_name}`:""}`);
 dashboardCache.clear(); added++}catch{errors.push({row:x.row_no,reason:"تعذر إنشاء المعاملة"})}}return json({ok:true,added,skipped:errors.length,errors})}
@@ -385,13 +428,16 @@ return json({record:withMeta(r),events:ev.results,stages})}
   if(b.action==="reactivate"){
     if(!allow(u,"reactivate_records"))return json({error:"ليس لديك صلاحية إعادة تنشيط المعاملة"},403);
     if(!(CLOSED.includes(r.status)||r.status==="stopped"))return json({error:"المعاملة ليست منتهية أو موقوفة"},400);
-    // Re-opening a final withdrawal starts a fresh regional decision.
-    // The old withdrawal data must not continue to make the external card look withdrawn.
-    const next=r.status==="final_withdrawn"?"waiting_region":r.status==="final_documented"?"region_documented":"waiting_region";
+    const next=String(b.new_status||"").trim();
+    if(!["final_documented","final_withdrawn"].includes(next))return json({error:"حدد الحالة الجديدة: تم التوثيق أو منسحب الموظف"},400);
+    if(!b.transaction_no||!b.transaction_date)return json({error:"إعادة التنشيط تتطلب رقم المعاملة وتاريخها"},400);
+    if(next==="final_withdrawn"&&(!b.end_date||!b.interruption_transaction_no))return json({error:"حالة منسحب الموظف تتطلب رقم معاملة الانقطاع / اتخاذ الإجراء وتاريخ آخر يوم عمل"},400);
+    const previous=`الحالة السابقة: ${labels[r.status]||r.status}${r.status==='final_withdrawn'&&r.end_date?` — آخر يوم عمل سابق: ${r.end_date}`:''}${r.status==='final_withdrawn'&&r.interruption_transaction_no?` — رقم معاملة الانقطاع/اتخاذ الإجراء السابق: ${r.interruption_transaction_no}`:''}`;
+    const details=next==="final_withdrawn"?`الحالة الجديدة: منسحب الموظف — رقم معاملة الانقطاع/اتخاذ الإجراء: ${b.interruption_transaction_no} — آخر يوم عمل: ${b.end_date} — رقم المعاملة: ${b.transaction_no} — تاريخ المعاملة: ${b.transaction_date}`:`الحالة الجديدة: تم التوثيق — رقم المعاملة: ${b.transaction_no} — تاريخ المعاملة: ${b.transaction_date}`;
     let pauseAdd=0;if(r.timer_paused_at)pauseAdd=Math.max(0,Math.floor((Date.now()-parseTs(r.timer_paused_at))/1000));
-    await env.DB.prepare("UPDATE records SET status=?,final_approved_at=NULL,end_date=CASE WHEN ?='waiting_region' THEN NULL ELSE end_date END,interruption_transaction_no=CASE WHEN ?='waiting_region' THEN NULL ELSE interruption_transaction_no END,region_responded_at=CASE WHEN ?='waiting_region' THEN NULL ELSE region_responded_at END,timer_end_at=NULL,timer_paused_at=NULL,paused_seconds=COALESCE(paused_seconds,0)+?,stopped_at=NULL,stopped_by=NULL,stage_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(next,next,next,next,pauseAdd,id).run();
-    await stageTransition(env,r,next==="waiting_region"||next==="returned"?"region":"approval",u.id);
-    await log(env,id,u.id,"إعادة تنشيط المعاملة",`الحالة الجديدة: ${labels[next]}`);
+    await env.DB.prepare(`UPDATE records SET status=?,transaction_no=?,transaction_date=?,end_date=?,interruption_transaction_no=?,final_approved_at=NULL,region_responded_at=NULL,region_note=NULL,timer_end_at=NULL,timer_paused_at=NULL,paused_seconds=COALESCE(paused_seconds,0)+?,stopped_at=NULL,stopped_by=NULL,completed_at=NULL,stage_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(next,b.transaction_no.trim(),b.transaction_date,next==="final_withdrawn"?b.end_date:null,next==="final_withdrawn"?b.interruption_transaction_no.trim():null,pauseAdd,id).run();
+    await stageTransition(env,r,"closed",u.id);
+    await log(env,id,u.id,"إعادة تنشيط المعاملة",`${previous} — ${details}`);
     return json({ok:true});
   }
 
@@ -480,11 +526,12 @@ return json({record:withMeta(r),events:ev.results,stages})}
     COALESCE(SUM(CASE WHEN status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,
     COALESCE(SUM(CASE WHEN status IN ('waiting_region','returned','region_documented','region_withdrawn') THEN 1 ELSE 0 END),0) in_progress,
     COALESCE(SUM(CASE WHEN status IN ('waiting_region','returned') THEN 1 ELSE 0 END),0) required,
-    COALESCE(SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue,
+    COALESCE(SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(created_at))*86400 >= ? THEN 1 ELSE 0 END),0) overdue,
+    COALESCE(SUM(CASE WHEN final_approved_at IS NOT NULL AND (julianday(final_approved_at)-julianday(created_at))*86400 >= ? THEN 1 ELSE 0 END),0) closed_after_delay,
     AVG(CASE WHEN final_approved_at IS NOT NULL THEN (julianday(final_approved_at)-julianday(created_at))*86400 END) avg_duration,
     AVG(CASE WHEN region_responded_at IS NOT NULL THEN (julianday(region_responded_at)-julianday(created_at))*86400 END) avg_response,
     AVG(CASE WHEN final_approved_at IS NOT NULL AND (julianday(final_approved_at)-julianday(created_at))*86400 > ? THEN ((julianday(final_approved_at)-julianday(created_at))*86400-?) END) avg_delay
-    FROM records${where}`).bind(SLA_HOURS*3600,SLA_HOURS*3600,...args);
+    FROM records${where}`).bind(SLA_HOURS*3600,SLA_HOURS*3600,SLA_HOURS*3600,...args);
 
   const recentStmt=env.DB.prepare(`SELECT substr(created_at,1,7) month,COUNT(*) count FROM records${where} GROUP BY substr(created_at,1,7) ORDER BY month DESC LIMIT 12`).bind(...args);
   const statusStmt=env.DB.prepare(`SELECT status key,COUNT(*) value FROM records${where} GROUP BY status`).bind(...args);
@@ -509,7 +556,8 @@ return json({record:withMeta(r),events:ev.results,stages})}
     comparison=(await env.DB.prepare(`SELECT u.id,u.name,u.username,u.role,u.region,COUNT(r.id) total,
       COALESCE(SUM(CASE WHEN r.status='final_documented' THEN 1 ELSE 0 END),0) documented,
       COALESCE(SUM(CASE WHEN r.status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,
-      COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND r.created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END),0) overdue,
+      COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(r.created_at))*86400 >= 48*3600 THEN 1 ELSE 0 END),0) overdue,
+      COALESCE(SUM(CASE WHEN r.final_approved_at IS NOT NULL AND (julianday(r.final_approved_at)-julianday(r.created_at))*86400 >= 48*3600 THEN 1 ELSE 0 END),0) closed_after_delay,
       AVG(CASE WHEN r.final_approved_at IS NOT NULL THEN (julianday(r.final_approved_at)-julianday(r.created_at))*86400 END) avg_duration,
       AVG(CASE WHEN r.region_responded_at IS NOT NULL THEN (julianday(r.region_responded_at)-julianday(r.created_at))*86400 END) avg_response
       FROM users u LEFT JOIN records r ON (
@@ -521,7 +569,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
         const t=Number(x.total||0), overdueN=Number(x.overdue||0);
         const role=x.role;
         const responseSeconds=role==="region"?Number(x.avg_response||0):Number(x.avg_duration||0);
-        return {...x,total:t,documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:overdueN,
+        return {...x,total:t,documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:overdueN,closed_after_delay:Number(x.closed_after_delay||0),
           avg_time_seconds:Math.round(responseSeconds),
           avg_time_label:durationLabel(Math.round(responseSeconds)),
           documentation_rate:t?Math.round(Number(x.documented||0)/t*100):0,
@@ -540,7 +588,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
   const quality={documentation_rate:total?Math.round(documented/total*100):0,withdrawal_rate:total?Math.round(withdrawn/total*100):0,sla_rate:withinSla};
   return json({
     manager,filters:{from,to},total,required:Number(row.required||0),inProgress:Number(row.in_progress||0),
-    completed,overdue:Number(row.overdue||0),documented,withdrawn,completionRate:total?Math.round(completed/total*100):0,
+    completed,overdue:Number(row.overdue||0),closed_after_delay:Number(row.closed_after_delay||0),documented,withdrawn,completionRate:total?Math.round(completed/total*100):0,
     withinSlaRate:withinSla,quality,avg_duration_seconds:avgDuration,avg_duration_label:durationLabel(avgDuration),
     median_duration_seconds:median,median_duration_label:durationLabel(median),
     avg_response_seconds:avgResponse,avg_response_label:durationLabel(avgResponse),
