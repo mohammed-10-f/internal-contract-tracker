@@ -1,7 +1,7 @@
 {
   "name": "internal-contract-tracker",
   "private": true,
-  "version": "20.1.0",
+  "version": "20.2.0",
   "scripts": {
     "check": "node --check src/worker.js && node --check public/app.js",
     "dev": "echo \"Cloudflare Workers local development requires Wrangler. Install it locally with your approved package registry, then run: wrangler dev\"",

@@ -409,54 +409,79 @@ return json({record:withMeta(r),events:ev.results,stages})}
  }
  if(p==="/api/dashboard"){
   await syncDelegations(env);
-  // مركز القيادة متاح لجميع المستخدمين المسجلين. تحليل الأداء يبقى منفصلًا بصلاحية view_stats.
-
   const cacheKey=`${u.id}:${u.role}`; const cached=dashboardCache.get(cacheKey); if(cached && Date.now()-cached.at<5000) return json(cached.data);
 
-  const responsibleOnly=u.role==="responsible";
-  const where=responsibleOnly?" WHERE responsible_user_id=? AND created_at>=datetime('now','-6 day')":" WHERE 1=1";
-  const bind=responsibleOnly?[u.id]:[];
-  const summary=await env.DB.prepare(`SELECT COUNT(*) total,
-    SUM(CASE WHEN status IN ('waiting_responsible','returned') THEN 1 ELSE 0 END) required,
-    SUM(CASE WHEN status='final_documented' THEN 1 ELSE 0 END) documented,
-    SUM(CASE WHEN status='final_withdrawn' THEN 1 ELSE 0 END) withdrawn,
-    SUM(CASE WHEN status='stopped' THEN 1 ELSE 0 END) stopped,
-    SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') THEN 1 ELSE 0 END) inprog,
-    SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND created_at<=datetime('now','-48 hour') THEN 1 ELSE 0 END) overdue
-    FROM records${where}`).bind(...bind).first();
-  let sql=`SELECT u.id,u.name,u.username,
-    COUNT(r.id) total,
-    SUM(CASE WHEN r.status IN ('waiting_responsible','returned') THEN 1 ELSE 0 END) required,
-    SUM(CASE WHEN r.status IN ('responsible_documented','responsible_withdrawn') THEN 1 ELSE 0 END) awaiting_approval,
-    SUM(CASE WHEN r.status IN ('final_documented','final_withdrawn') THEN 1 ELSE 0 END) completed,
-    SUM(CASE WHEN r.status='returned' THEN 1 ELSE 0 END) returned,
-    SUM(CASE WHEN r.status='stopped' THEN 1 ELSE 0 END) stopped
-    FROM users u LEFT JOIN records r ON r.responsible_user_id=u.id AND r.created_at>=datetime('now','-6 day')
-    WHERE u.role='responsible' AND u.active=1`;
-  const ma=[]; if(responsibleOnly){sql+=" AND u.id=?";ma.push(u.id)} sql+=" GROUP BY u.id ORDER BY required DESC,total DESC";
-  const managers=(allowRoleFallback(u,"view_stats")||u.role==="responsible")?(await env.DB.prepare(sql).bind(...ma).all()).results:[];
-  const activitySql=responsibleOnly?`SELECT a.*,u.name actor_name,r.employee_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN records r ON r.id=a.record_id WHERE r.responsible_user_id=? ORDER BY a.id DESC LIMIT 10`:`SELECT a.*,u.name actor_name,r.employee_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN records r ON r.id=a.record_id WHERE a.record_id IS NOT NULL ORDER BY a.id DESC LIMIT 10`;
-  const activity=await env.DB.prepare(activitySql).bind(...(responsibleOnly?[u.id]:[])).all();
-  const payload={total:Number(summary?.total||0),required:Number(summary?.required||0),documented:Number(summary?.documented||0),withdrawn:Number(summary?.withdrawn||0),stopped:Number(summary?.stopped||0),overdue:Number(summary?.overdue||0),inprog:Number(summary?.inprog||0),managers,recent_activity:activity.results,sla_hours:SLA_HOURS,report_date:reportDate()}; dashboardCache.set(cacheKey,{at:Date.now(),data:payload}); return json(payload);
+  let attentionWhere="", attentionArgs=[];
+  if(u.role==="responsible"){
+    attentionWhere=" AND (r.responsible_user_id=? OR r.original_responsible_user_id=?) AND r.status IN ('waiting_responsible','returned')";
+    attentionArgs=[u.id,u.id];
+  }else if(u.role==="requester"){
+    attentionWhere=" AND (r.requester_id=? OR r.delegated_to_user_id=?) AND r.status IN ('responsible_documented','responsible_withdrawn','returned')";
+    attentionArgs=[u.id,u.id];
+  }else{
+    attentionWhere=" AND r.status IN ('waiting_responsible','returned','responsible_documented','responsible_withdrawn')";
+  }
+  const attention=(await env.DB.prepare(`SELECT r.id,r.employee_name,r.employee_no,r.status,r.updated_at,r.stage_started_at,ru.name responsible_user_name,
+    ROUND(MAX(0,(julianday('now')-julianday(COALESCE(r.stage_started_at,r.updated_at)))*86400)) stage_age_seconds
+    FROM records r LEFT JOIN users ru ON ru.id=r.responsible_user_id
+    WHERE 1=1 ${attentionWhere}
+    ORDER BY CASE WHEN r.status IN ('waiting_responsible','returned') THEN 0 ELSE 1 END,
+             CASE WHEN (julianday('now')-julianday(COALESCE(r.stage_started_at,r.updated_at)))*86400>=? THEN 0 ELSE 1 END,
+             r.updated_at ASC LIMIT 8`).bind(...attentionArgs,SLA_HOURS*3600).all()).results;
+
+  let overdueWhere=" AND r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(COALESCE(r.stage_started_at,r.updated_at)))*86400>=?", overdueArgs=[SLA_HOURS*3600];
+  if(u.role==="responsible"){overdueWhere+=" AND (r.responsible_user_id=? OR r.original_responsible_user_id=?)";overdueArgs.push(u.id,u.id)}
+  else if(u.role==="requester"){overdueWhere+=" AND (r.requester_id=? OR r.delegated_to_user_id=?)";overdueArgs.push(u.id,u.id)}
+  const counts=await env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM records r WHERE 1=1 ${attentionWhere}) AS needs_action,
+    (SELECT COUNT(*) FROM records r WHERE r.status IN ('responsible_documented','responsible_withdrawn') ${u.role==="requester"?'AND (r.requester_id=? OR r.delegated_to_user_id=?)':''}) AS waiting_approval,
+    (SELECT COUNT(*) FROM records r WHERE 1=1 ${overdueWhere}) AS overdue,
+    (SELECT COUNT(*) FROM records r WHERE r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') ${u.role==="responsible"?'AND (r.responsible_user_id=? OR r.original_responsible_user_id=?)':u.role==="requester"?'AND (r.requester_id=? OR r.delegated_to_user_id=?)':''}) AS active,
+    (SELECT COUNT(*) FROM records r WHERE r.status IN ('final_documented','final_withdrawn') AND date(r.updated_at)=date('now') ${u.role==="responsible"?'AND (r.responsible_user_id=? OR r.original_responsible_user_id=?)':u.role==="requester"?'AND (r.requester_id=? OR r.delegated_to_user_id=?)':''}) AS closed_today`).bind(
+      ...attentionArgs,
+      ...(u.role==="requester"?[u.id,u.id]:[]),
+      ...overdueArgs,
+      ...(u.role==="responsible"?[u.id,u.id]:u.role==="requester"?[u.id,u.id]:[]),
+      ...(u.role==="responsible"?[u.id,u.id]:u.role==="requester"?[u.id,u.id]:[])
+    ).first();
+  let activitySql=`SELECT a.id,a.record_id,a.action,a.note,a.created_at,u.name actor_name,r.employee_name,r.status FROM audit_log a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN records r ON r.id=a.record_id WHERE a.record_id IS NOT NULL`;
+  const activityArgs=[];
+  if(u.role==="responsible"){activitySql+=" AND (r.responsible_user_id=? OR r.original_responsible_user_id=?)";activityArgs.push(u.id,u.id)}
+  else if(u.role==="requester"){activitySql+=" AND (r.requester_id=? OR r.delegated_to_user_id=?)";activityArgs.push(u.id,u.id)}
+  activitySql+=" ORDER BY a.id DESC LIMIT 8";
+  const activity=(await env.DB.prepare(activitySql).bind(...activityArgs).all()).results;
+  const payload={needs_action:Number(counts?.needs_action||0),waiting_approval:Number(counts?.waiting_approval||0),overdue:Number(counts?.overdue||0),active:Number(counts?.active||0),closed_today:Number(counts?.closed_today||0),attention:attention.map(x=>({...x,status_label:labels[x.status]||x.status})),recent_activity:activity,sla_hours:SLA_HOURS,report_date:reportDate()};
+  dashboardCache.set(cacheKey,{at:Date.now(),data:payload}); return json(payload);
  }
  if(p==="/api/manager-stats"&&req.method==="GET"){
   if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
   const requested=Number(url.searchParams.get("manager_id")||0),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
   const managerId=u.role==="responsible"?u.id:requested;
   if(u.role==="responsible"&&managerId!==u.id)return json({error:"غير مصرح"},403);
-  let manager,where="",args=[];
-  if(managerId){manager=await env.DB.prepare("SELECT id,name,username,role FROM users WHERE id=? AND active=1 AND role='responsible'").bind(managerId).first();if(!manager)return json({error:"المستخدم المسؤول غير موجود أو غير نشط"},404);where=" WHERE responsible_user_id=?";args=[managerId];}
-  else {if(u.role==="responsible")return json({error:"غير مصرح"},403);manager={id:0,name:"كل المسؤولين",username:"",role:"all"};}
-  if(from){where+=(where?" AND":" WHERE")+" created_at>=?";args.push(from+" 00:00:00");}
-  if(to){where+=(where?" AND":" WHERE")+" created_at<=?";args.push(to+" 23:59:59");}
-  const q=`SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN status='final_documented' THEN 1 ELSE 0 END),0) documented,COALESCE(SUM(CASE WHEN status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,COALESCE(SUM(CASE WHEN status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(created_at))*86400>=? THEN 1 ELSE 0 END),0) overdue,COALESCE(SUM(CASE WHEN final_approved_at IS NOT NULL AND (julianday(final_approved_at)-julianday(created_at))*86400>=? THEN 1 ELSE 0 END),0) closed_after_delay FROM records${where}`;
-  const row=await env.DB.prepare(q).bind(SLA_HOURS*3600,SLA_HOURS*3600,...args).first();
-  const total=Number(row?.total||0),documented=Number(row?.documented||0),withdrawn=Number(row?.withdrawn||0),overdue=Number(row?.overdue||0),closedAfterDelay=Number(row?.closed_after_delay||0);
-  let comparison=[];
-  if(u.role==="responsible"){comparison=[{id:u.id,name:u.name,username:u.username,role:u.role,total,documented,withdrawn,overdue,closed_after_delay:closedAfterDelay}];}
-  else {
-    let cw="",ca=[];if(from){cw+=" AND r.created_at>=?";ca.push(from+" 00:00:00")}if(to){cw+=" AND r.created_at<=?";ca.push(to+" 23:59:59")}
-    comparison=(await env.DB.prepare(`SELECT u.id,u.name,u.username,u.role,COUNT(r.id) total,COALESCE(SUM(CASE WHEN r.status='final_documented' THEN 1 ELSE 0 END),0) documented,COALESCE(SUM(CASE WHEN r.status='final_withdrawn' THEN 1 ELSE 0 END),0) withdrawn,COALESCE(SUM(CASE WHEN r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND (julianday('now')-julianday(r.created_at))*86400>=48*3600 THEN 1 ELSE 0 END),0) overdue,COALESCE(SUM(CASE WHEN r.final_approved_at IS NOT NULL AND (julianday(r.final_approved_at)-julianday(r.created_at))*86400>=48*3600 THEN 1 ELSE 0 END),0) closed_after_delay FROM users u LEFT JOIN records r ON r.responsible_user_id=u.id${cw} WHERE u.active=1 AND u.role='responsible' GROUP BY u.id ORDER BY u.name`).bind(...ca).all()).results.map(x=>({...x,total:Number(x.total||0),documented:Number(x.documented||0),withdrawn:Number(x.withdrawn||0),overdue:Number(x.overdue||0),closed_after_delay:Number(x.closed_after_delay||0)}));
+  if(!managerId)return json({error:"اختر المستخدم المسؤول"},400);
+  const manager=await env.DB.prepare("SELECT id,name,username,role FROM users WHERE id=? AND active=1 AND role='responsible'").bind(managerId).first();
+  if(!manager)return json({error:"المستخدم المسؤول غير موجود أو غير نشط"},404);
+  const dateParts=[]; if(from)dateParts.push("r.created_at>=?"); if(to)dateParts.push("r.created_at<=?");
+  const dateSql=dateParts.length?" AND "+dateParts.join(" AND "):""; const dateArgs=[]; if(from)dateArgs.push(from+" 00:00:00"); if(to)dateArgs.push(to+" 23:59:59");
+  const touchedSql=`SELECT DISTINCT r.id,r.status FROM records r JOIN record_stages rs ON rs.record_id=r.id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql}`;
+  const touched=await env.DB.prepare(touchedSql).bind(managerId,...dateArgs).all();
+  const rows=touched.results||[];
+  const total=rows.length, documented=rows.filter(r=>r.status==='final_documented').length, withdrawn=rows.filter(r=>r.status==='final_withdrawn').length;
+  const overdueStage=await env.DB.prepare(`SELECT rs.record_id,SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400) seconds
+    FROM record_stages rs JOIN records r ON r.id=rs.record_id
+    WHERE rs.stage='responsible' AND rs.user_id=?${dateSql}
+    GROUP BY rs.record_id HAVING seconds>=?`).bind(managerId,...dateArgs,SLA_HOURS*3600).all();
+  const delayedIds=new Set((overdueStage.results||[]).map(x=>Number(x.record_id)));
+  const overdue=delayedIds.size;
+  const closedAfterDelay=rows.filter(r=>delayedIds.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length;
+
+  const users=(await env.DB.prepare("SELECT id,name,username,role FROM users WHERE active=1 AND role='responsible' ORDER BY name").all()).results;
+  const comparison=[];
+  for(const person of users){
+    const pr=await env.DB.prepare(touchedSql).bind(person.id,...dateArgs).all();
+    const prows=pr.results||[]; const pdel=await env.DB.prepare(`SELECT rs.record_id,SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400) seconds FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING seconds>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
+    const ids=new Set((pdel.results||[]).map(x=>Number(x.record_id)));
+    comparison.push({id:person.id,name:person.name,username:person.username,role:person.role,total:prows.length,documented:prows.filter(r=>r.status==='final_documented').length,withdrawn:prows.filter(r=>r.status==='final_withdrawn').length,overdue:ids.size,closed_after_delay:prows.filter(r=>ids.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length});
   }
   return json({manager,filters:{from,to},total,documented,withdrawn,overdue,closed_after_delay:closedAfterDelay,comparison,report_date:reportDate()});
  }

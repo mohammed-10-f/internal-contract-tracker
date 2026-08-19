@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.0.0";
+const APP_VERSION="20.2.0";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -282,28 +282,30 @@ async function boot(){try{const d=await api("/api/me");ME=d.user;if(ME){layout(M
 let idleGuard=null;
 function startIdleGuard(){clearInterval(idleGuard);idleGuard=setInterval(async()=>{if(!ME)return;try{const d=await api("/api/me",{cacheBust:Date.now()});if(!d.user){clearInterval(idleGuard);ME=null;toast("انتهت الجلسة بسبب عدم النشاط لمدة 30 دقيقة","err");login();}}catch(e){if(String(e.message).includes("غير مصرح")){clearInterval(idleGuard);ME=null;login();}}},60000)}
 async function dash(){
-  VIEW="home";navActive("home");title("مركز القيادة","مساحة تشغيلية يومية لاتخاذ القرار ومتابعة العمل — منفصلة عن تحليل الأداء.");
+  VIEW="home";navActive("home");title("مركز القيادة","");
   const view=document.querySelector("#view"); view.innerHTML=`<div class="loading">جاري تجهيز مركز القيادة…</div>`;
   try{
     const d=await api("/api/dashboard");
-    const done=(d.documented||0)+(d.withdrawn||0);
-    const pct=d.total?Math.round(done/d.total*100):0;
-    const required=d.required||0, overdue=d.overdue||0, active=d.inprog||0;
-    const heroTitle=ME.role==="responsible"?`مرحباً ${esc(ME.name)}`:`مرحباً ${esc(ME.name)}`;
-    const roleHint=ME.role==="responsible"?"هذه مساحتك التشغيلية لمتابعة ما يحتاج منك إجراء الآن.":"نظرة عملية على سير العمل، الأولويات، والتنبيهات اليومية دون خلطها مع تحليل الأداء.";
-    view.innerHTML=`<section class="commandCenterPro">
-      <div class="ccHero"><div class="ccHeroCopy"><span class="eyebrow ccEyebrow">COMMAND CENTER</span><h2>${heroTitle}</h2><p>${roleHint}</p><div class="ccQuickActions">${can("upload_contracts")?`<button class="ccPrimary" onclick="add()"><span>＋</span> معاملة جديدة</button>`:""}<button class="ccSecondary" onclick="list(${ME.role==="responsible"?"'required'":"''"})">استعراض المعاملات <span>←</span></button>${can("view_stats")?`<button class="ccSecondary" onclick="statsPage()">تحليل الأداء <span>↗</span></button>`:""}</div></div><div class="ccProgress"><div class="ccProgressTop"><span>الإغلاق التشغيلي</span><b>${pct}%</b></div><div class="ccProgressBar"><i style="width:${pct}%"></i></div><small>${done} معاملة مكتملة من أصل ${d.total||0}</small></div></div>
-      <div class="ccMetricGrid">
-        <button class="ccMetric" onclick="list(${ME.role==="responsible"?"'required'":"''"})"><span class="ccMetricIcon blue">◷</span><span><small>تحتاج إجراء</small><strong>${required}</strong><em>${ME.role==="responsible"?"مطلوب منك الآن":"ضمن قائمة العمل"}</em></span></button>
-        <button class="ccMetric" onclick="list('')"><span class="ccMetricIcon navy">▦</span><span><small>معاملات نشطة</small><strong>${active}</strong><em>قيد المتابعة</em></span></button>
-        <button class="ccMetric" onclick="list('overdue')"><span class="ccMetricIcon red">!</span><span><small>تحتاج تدخل</small><strong>${overdue}</strong><em>${overdue?"يوجد تأخير يحتاج متابعة":"لا يوجد تأخير حاليًا"}</em></span></button>
-        <button class="ccMetric" onclick="list('closed')"><span class="ccMetricIcon green">✓</span><span><small>مكتملة</small><strong>${done}</strong><em>تم توثيقها أو إنهاؤها</em></span></button>
+    const isResponsible=ME.role==="responsible", isRequester=ME.role==="requester";
+    const attentionTitle=isResponsible?"يحتاج منك إجراء":isRequester?"يحتاج متابعتك":"يحتاج انتباهك";
+    const attention=(d.attention||[]).map(r=>`<article class="commandTask ${Number(r.stage_age_seconds||0)>=Number(d.sla_hours||48)*3600?'isOverdue':''}">
+      <div class="commandTaskMain"><span class="commandTaskNo">#${esc(r.id)}</span><div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")} · المسؤول: ${esc(r.responsible_user_name||"—")}</small></div></div>
+      <div class="commandTaskState"><span class="statusChip ${r.status==='returned'?'warn':r.status==='responsible_documented'||r.status==='responsible_withdrawn'?'info':'pending'}">${esc(r.status_label||statusLabel[r.status]||r.status)}</span><small>${fmtDateTime(r.updated_at)}</small></div>
+      <button class="commandTaskAction" onclick="openRecord(${Number(r.id)})">التفاصيل</button>
+    </article>`).join("");
+    const activity=(d.recent_activity||[]).map(e=>`<div class="commandActivity"><span class="commandActivityDot"></span><div><strong>${esc(e.action||"نشاط")}</strong><small>${esc(e.employee_name||"المعاملة")} · ${esc(e.actor_name||"النظام")} · ${fmtDateTime(e.created_at)}</small></div></div>`).join("");
+    view.innerHTML=`<section class="commandCenter commandCenterClean">
+      <header class="commandWelcome"><div><span class="eyebrow">مركز القيادة</span><h2>${esc(ME.name)}</h2><p>المهام التي تستحق انتباهك الآن.</p></div><div class="commandActions">${can("upload_contracts")?`<button class="ccPrimary" onclick="add()">＋ معاملة جديدة</button>`:""}<button class="ccSecondary" onclick="list(${isResponsible?"'required'":"''"})">المعاملات</button></div></header>
+      <div class="commandSignals">
+        <button class="commandSignal" onclick="list(${isResponsible?"'required'":"'required'"})"><span class="signalIcon blue">!</span><div><small>يحتاج إجراء</small><b>${Number(d.needs_action||0)}</b></div></button>
+        <button class="commandSignal" onclick="list('approval')"><span class="signalIcon amber">◷</span><div><small>بانتظار الاعتماد</small><b>${Number(d.waiting_approval||0)}</b></div></button>
+        <button class="commandSignal" onclick="list('overdue')"><span class="signalIcon red">!</span><div><small>متأخرة الآن</small><b>${Number(d.overdue||0)}</b></div></button>
+        <button class="commandSignal" onclick="list('closed')"><span class="signalIcon green">✓</span><div><small>أُغلقت اليوم</small><b>${Number(d.closed_today||0)}</b></div></button>
       </div>
-      <div class="ccGrid">
-        <section class="ccPanel ccPriority"><div class="ccPanelHead"><div><span class="eyebrow">PRIORITY QUEUE</span><h3>الأولوية الآن</h3><p>${ME.role==="responsible"?"المعاملات التي تحتاج إفادتك مباشرة.":"أهم المؤشرات التشغيلية التي تستحق المتابعة الآن."}</p></div><button class="ccLink" onclick="list(${ME.role==="responsible"?"'required'":"''"})">فتح القائمة ←</button></div><div class="ccPriorityList"><div><span class="priorityDot red"></span><div><b>المعاملات المتأخرة</b><small>راجع الحالات التي تجاوزت مدة الخدمة.</small></div><strong>${overdue}</strong></div><div><span class="priorityDot orange"></span><div><b>${ME.role==="responsible"?"بانتظار إفادتك":"تحتاج إجراء"}</b><small>${ME.role==="responsible"?"ابدأ بالحالات المطلوبة منك.":"حالات تحتاج متابعة أو قرار."}</small></div><strong>${required}</strong></div><div><span class="priorityDot green"></span><div><b>العمل المكتمل</b><small>حالات وصلت إلى نتيجة نهائية.</small></div><strong>${done}</strong></div></div></section>
-        <section class="ccPanel"><div class="ccPanelHead"><div><span class="eyebrow">WORK SNAPSHOT</span><h3>لقطة العمل</h3><p>توزيع سريع للحالات الحالية.</p></div></div><div class="ccSnapshot"><div><span>نشطة</span><b>${active}</b></div><div><span>مطلوب إجراء</span><b>${required}</b></div><div><span>موقوفة</span><b>${d.stopped||0}</b></div><div><span>مكتملة</span><b>${done}</b></div></div></section>
+      <div class="commandColumns">
+        <section class="commandPanel commandTasksPanel"><div class="commandPanelHead"><div><span class="eyebrow">الأولوية</span><h3>${attentionTitle}</h3></div><button class="ccLink" onclick="list(${isResponsible?"'required'":"''"})">عرض الكل ←</button></div><div class="commandTasks">${attention||emptyState("لا توجد معاملات تحتاج انتباهك الآن")}</div></section>
+        <aside class="commandPanel commandActivityPanel"><div class="commandPanelHead"><div><span class="eyebrow">آخر النشاط</span><h3>ما حدث مؤخرًا</h3></div></div><div class="commandActivities">${activity||emptyState("لا يوجد نشاط حديث")}</div></aside>
       </div>
-      ${d.recent_activity?.length?activityPanel(d.recent_activity):""}
     </section>`;
     startLiveTimers();
   }catch(e){view.innerHTML=errorState(e.message);}
@@ -664,18 +666,28 @@ async function importFile(){
 }
 function impactMetric(label,value,total,color,percent=false){const n=Number(value||0),pct=percent?n:((Number(total||0)?Math.round(n/Number(total)*100):0));return `<div class="impactMetric"><div><span>${label}</span><b>${percent?pct+"%":n}</b></div><i class="${color}" style="width:${Math.min(100,pct)}%"></i></div>`}
 async function statsPage(managerId=""){
-  VIEW="stats";navActive("stats");title("تحليل الأداء","مؤشرات أداء مباشرة، مع مقارنة عادلة بين المستخدمين على نفس الفترة.");
+  VIEW="stats";navActive("stats");title("تحليل الأداء","");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
+    const [usersData]=await Promise.all([api("/api/stats-users?_="+Date.now())]);
+    const users=usersData.users||[];
+    const storedUser=Number(localStorage.getItem("statsUserId")||0);
+    const selectedId=ME.role==="responsible"?Number(ME.id):Number(managerId||storedUser||users[0]?.id||0);
     const from=localStorage.getItem("statsFrom")||"",to=localStorage.getItem("statsTo")||"";
-    const selected=ME.role==="responsible"?String(ME.id):String(managerId||"0");
-    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selected,from,to}).toString()}`);
-    if(!d?.manager)throw Error("تعذر تجهيز بيانات تحليل الأداء.");
-    const compareRows=(d.comparison||[]).map(x=>`<div class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)&&Number(d.manager.id)!==0?'current':''}"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></div>`).join("");
-    v.innerHTML=`<section class="section"><div class="analysisToolbar"><div><span class="eyebrow">PERFORMANCE ANALYSIS</span><h2>${esc(d.manager.name)}</h2><span class="analysisMeta">${from||"بداية الفترة"} — ${to||"نهاية الفترة"}</span></div></div><div class="analyticsFilters"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button><button class="soft" onclick="exportStats(${Number(d.manager.id)||0})">تصدير Excel</button></div><div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div><section class="chartCard performanceComparisonZone"><div class="chartHead"><div><h3>مقارنة أداء المستخدمين</h3><p>تتم المقارنة على نفس الفترة الزمنية المختارة أعلاه لضمان عدالة القياس.</p></div><span>${from||"—"} → ${to||"—"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة في الفترة المحددة</div>`}</div></section></section>`;
+    if(!selectedId)throw Error("لا يوجد مستخدم مسؤول لعرض إحصائياته.");
+    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:String(selectedId),from,to}).toString()}`);
+    const options=users.map(x=>`<option value="${x.id}" ${Number(x.id)===selectedId?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("");
+    const compareRows=(d.comparison||[]).map(x=>`<button class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("");
+    v.innerHTML=`<section class="section performancePage">
+      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">المستخدم</span>${ME.role==="responsible"?`<strong>${esc(d.manager.name)}</strong>`:`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`}</div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button></div></div>
+      <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div>
+      <section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${from||"—"} → ${to||"—"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}</div></section>
+    </section>`;
+    enhanceSelects(v);
   }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
-function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");statsPage(id);}
+function selectStatsUser(id){localStorage.setItem("statsUserId",String(id||""));statsPage(String(id||""));}
+function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");localStorage.setItem("statsUserId",String(id||document.querySelector("#statsUser")?.value||""));statsPage(String(id||document.querySelector("#statsUser")?.value||""));}
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
 async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}
