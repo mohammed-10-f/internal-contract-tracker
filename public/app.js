@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.2.0";
+const APP_VERSION="20.3.1";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -522,15 +522,7 @@ function actionsHtml(r){
 
   let h="";
   if((r.status==="waiting_responsible"||r.status==="returned")&&responsibleCan){
-    h+=`<div class="v4-action-card">
-      <div class="v4-action-title"><span class="v4-action-icon">إف</span><div><b>إفادة المسؤول</b><small>اختر النتيجة ثم نفذ الإجراء</small></div></div>
-      <textarea id="detailNote" placeholder="ملاحظة الإفادة — اختيارية"></textarea>
-      <div class="v4-action-buttons">
-        <button class="v4-btn success" onclick="perform(${r.id},'responsible_documented')">✓ تم التوثيق</button>
-        <button class="v4-btn danger" onclick="withdrawForm(${r.id})">منسحب الموظف</button>
-      </div>
-      <div id="withdrawArea"></div>
-    </div>`;
+    h+=`<div class="v4-no-action"><span>✓</span><div><b>الإفادة متاحة من قائمة المعاملات</b><small>استخدم «تم التوثيق» أو «منسحب» مباشرة من بطاقة المعاملة.</small></div></div>`;
   }
   if((r.status==="responsible_documented"||r.status==="responsible_withdrawn")&&approveCan){
     h+=`<div class="v4-action-card approval">

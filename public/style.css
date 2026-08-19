@@ -1089,7 +1089,7 @@ select{
 .performanceCompareRow strong{display:flex;flex-direction:column;gap:3px}.performanceCompareRow strong small{font-size:9px;color:var(--slate-500);font-weight:600}
 .performanceCompareRow b{text-align:center;font-family:var(--font-mono)}
 .goodText{color:var(--success-700)!important}.warnText{color:var(--warn-700)!important}.dangerText{color:var(--danger-700)!important}
-@media(max-width:760px){.impactMetrics{grid-template-columns:repeat(2,minmax(0,1fr));}.performanceCompareHead,.performanceCompareRow{min-width:560px}.v3-case-status-stack{justify-content:flex-start;align-items:flex-start}.v3-action-badge{font-size:9px!important}}
+@media(max-width:900px){.impactMetrics{grid-template-columns:repeat(2,minmax(0,1fr));}.performanceCompareHead,.performanceCompareRow{min-width:560px}.v3-case-status-stack{justify-content:flex-start;align-items:flex-start}.v3-action-badge{font-size:9px!important}}
 
 /* 1S v2.5 targeted refinements — no theme changes */
 .v3-case-status-stack{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:nowrap;min-width:0;white-space:nowrap}
@@ -1103,7 +1103,7 @@ select{
 .v4-workflow .v4-stage{padding:7px 8px!important}
 .v4-workflow .v4-stage-icon{width:34px!important;height:34px!important}
 .v4-workflow .v4-stage-label{font-size:9px!important}
-@media(max-width:760px){
+@media(max-width:900px){
   .v3-case-status-stack{justify-content:flex-start;flex-wrap:wrap;gap:5px}
   .v3-case-row{grid-template-columns:1fr auto!important}
   .v3-case-type,.v3-case-responsible,.v3-case-assignee{min-width:0}
@@ -1118,7 +1118,7 @@ select{
 .hStep b{font-size:9.5px!important}
 .hStep small{font-size:8px!important;margin-top:3px!important}
 .hLine{min-width:12px!important;height:2px!important;margin-top:18px!important}
-@media(max-width:760px){
+@media(max-width:900px){
   .hTimeline{padding:10px 2px 7px!important}
   .hStep{min-width:0!important;flex:1!important}
   .hNode{width:34px!important;height:34px!important;font-size:12px!important}
@@ -1139,7 +1139,7 @@ select{
 .v4-reactivate-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
 .v4-reactivate-fields label span{display:block;font-size:9px;font-weight:700;color:var(--slate-600);margin-bottom:5px}
 .v4-reactivate-fields input,.v4-reactivate-fields select{width:100%;background:#fff}
-@media(max-width:760px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(5,minmax(82px,1fr));min-width:700px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
+@media(max-width:900px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(5,minmax(82px,1fr));min-width:700px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
 
 
 /* V20.1 — retained base interaction polish */
@@ -1242,7 +1242,7 @@ select{
 .v3-direct-actions .documentAction{border-color:#bfe4d2;background:#f4fbf7;color:#19724b}
 .v3-direct-actions .v3-action:hover{transform:translateY(-1px)}
 
-@media(max-width:760px){
+@media(max-width:900px){
   /* One navigation only: bottom navigation controls the whole mobile app. */
   .topNav{display:none!important}
   .topbar{padding:9px 12px;min-height:58px}
@@ -1306,3 +1306,29 @@ select{
 
   .appSelectMenu{max-height:45vh;overscroll-behavior:contain}
 }
+
+/* V20.3.1 — final mobile and interaction cleanup */
+@media(max-width:900px){
+  .topNav{display:none!important}
+  .mobileBar{position:fixed!important;left:0;right:0;bottom:0;z-index:1000;display:grid!important;background:rgba(255,255,255,.98);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(15,35,60,.08);}
+  .main{padding-bottom:88px!important}
+  .pageHeader{padding-inline:14px!important}
+  .statsSelectionBar,.filterBar,.auditFilters,.formGrid{min-width:0!important;max-width:100%!important}
+  .statsPeriod{grid-template-columns:1fr 1fr!important}
+  .statsPeriod input{min-width:0!important;width:100%!important;max-width:100%!important}
+  .performanceComparisonZone{display:block}
+  .recordInlineDetails{max-width:100%;box-sizing:border-box}
+  .recordInlineDetails .v4-body{min-width:0}
+  .v3-case-action{min-width:0!important}
+}
+@media(max-width:520px){
+  .mobileBar{grid-auto-columns:minmax(58px,1fr);gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .mobileBar button{min-width:58px;height:50px;font-size:8px}
+  .statsSelectionBar{border-radius:15px;padding:12px!important}
+  .statsPeriod{grid-template-columns:1fr!important}
+  .statsPeriod .primary{grid-column:auto!important}
+  .filterBar label,.filterBar input,.filterBar .appSelect,.filterBar button{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box}
+  .v3-direct-actions{grid-template-columns:1fr 1fr!important}
+}
+.appSelectButton{touch-action:manipulation}
+.appSelectMenu button{touch-action:manipulation}
