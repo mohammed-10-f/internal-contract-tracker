@@ -721,7 +721,7 @@ async function saveUser(id){
     const b={name,role,permissions};if(!id)b.username=username;if(password)b.password=password;
     if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});
     else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});
-    modal.remove();toast("تم حفظ المستخدم");await users();
+    modal.closest(".modalShade")?.remove();toast("تم حفظ المستخدم");await users();
   }catch(e){
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="حفظ التغييرات";saveBtn.classList.remove("isLoading");}
     toast(e.message,"err");
