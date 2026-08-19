@@ -1323,7 +1323,7 @@ select{
   .appSelectMenu{max-height:45vh;overscroll-behavior:contain}
 }
 
-/* V20.3.1 — final mobile and interaction cleanup */
+/* V20.5.0 — final mobile and interaction cleanup */
 @media(max-width:900px){
   .topNav{display:none!important}
   .mobileBar{position:fixed!important;left:0;right:0;bottom:0;z-index:1000;display:grid!important;background:rgba(255,255,255,.98);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(15,35,60,.08);}
@@ -1366,3 +1366,24 @@ select{
   .auditFilters{grid-template-columns:1fr 1fr!important;align-items:end}.auditFilters>input{grid-column:1/-1}.auditFilters>label{min-width:0}.auditFilters>label input{width:100%;box-sizing:border-box}.auditFilters>.soft{width:100%;height:42px}
 }
 @media(max-width:520px){.auditFilters{grid-template-columns:1fr!important}.auditFilters>input{grid-column:auto}.accountActions{flex-direction:column}.accountActions button{width:100%}}
+
+/* V20.5.0 — mobile navigation, password UX, session feedback */
+.mobileMoreMenu{
+  position:fixed;right:12px;bottom:82px;z-index:1001;min-width:190px;max-width:calc(100vw - 24px);
+  padding:7px;background:rgba(15,28,49,.98);border:1px solid rgba(255,255,255,.1);border-radius:16px;
+  box-shadow:0 18px 45px rgba(4,10,22,.28);backdrop-filter:blur(14px);
+}
+.mobileMoreMenu[hidden]{display:none}
+.mobileMoreMenu button{width:100%;display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:11px 12px;border:0;background:transparent;color:#dbe7f5;border-radius:11px;font-size:11px;font-weight:700;cursor:pointer;text-align:right}
+.mobileMoreMenu button:hover{background:rgba(255,255,255,.08)}
+.mobileMoreBtn.active{background:rgba(255,255,255,.12)!important;color:#fff!important}
+.passwordField{position:relative;display:flex;align-items:stretch;min-width:0}
+.passwordField input{padding-inline-end:64px!important;width:100%}
+.passwordToggle{position:absolute;inset-inline-end:5px;top:5px;height:32px;padding:0 8px;border:0;border-radius:8px;background:var(--slate-100);color:var(--slate-600);font-size:9px;font-weight:800;cursor:pointer}
+.passwordToggle:hover{background:var(--slate-200);color:var(--slate-800)}
+#loginError:empty{display:none}
+#loginError:not(:empty){display:block;margin-top:8px;color:var(--danger-600);line-height:1.6}
+@media(max-width:900px){
+  .mobileMoreMenu{right:10px;bottom:76px}
+  .mobileBar{padding-inline:5px!important}
+}

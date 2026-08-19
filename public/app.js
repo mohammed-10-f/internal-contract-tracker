@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.3.1";
+const APP_VERSION="20.5.0";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -171,7 +171,13 @@ async function api(url, opts={}) {
   const contentType=r.headers.get("content-type")||"";
   if(contentType.includes("application/json")){ try{data=await r.json()}catch{} }
   else { const text=await r.text().catch(()=>""); if(text)data={error:text.slice(0,500)}; }
-  if(!r.ok){const err=Error(data.error||`تعذر تنفيذ العملية (${r.status})`);err.status=r.status;err.data=data;err.url=requestUrl;throw err;}
+  if(!r.ok){
+    if(r.status===401 && ME && !opts.skipSessionHandling){
+      ME=null;
+      login("انتهت جلستك بسبب عدم النشاط أو انتهاء صلاحيتها. يرجى تسجيل الدخول مرة أخرى.");
+    }
+    const err=Error(data.error||`تعذر تنفيذ العملية (${r.status})`);err.status=r.status;err.data=data;err.url=requestUrl;throw err;
+  }
 
   return data;
 }
@@ -234,7 +240,7 @@ function enhanceSelects(root=document){
     const observer=new MutationObserver(rebuild); observer.observe(sel,{childList:true,subtree:true,attributes:true,attributeFilter:['selected']});
   });
 }
-document.addEventListener('click',()=>document.querySelectorAll('.appSelectMenu.open').forEach(x=>x.classList.remove('open')));
+document.addEventListener('click',e=>{document.querySelectorAll('.appSelectMenu.open').forEach(x=>x.classList.remove('open'));const menu=document.querySelector('#mobileMoreMenu'),bar=document.querySelector('.mobileBar');if(menu&&!menu.hidden&&!e.target.closest('#mobileMoreMenu')&&!e.target.closest('.mobileMoreBtn')){menu.hidden=true;document.querySelector('.mobileMoreBtn')?.classList.remove('active');}});
 const selectObserver=new MutationObserver(m=>{if(m.some(x=>x.addedNodes.length)) enhanceSelects(document)});
 selectObserver.observe(document.body,{childList:true,subtree:true});
 function layout(u){
@@ -247,6 +253,9 @@ function layout(u){
   if(can("view_closed")) navItems.push(`<button data-nav="closed" onclick="list('closed')"><i class="navIcon">${navIcon("archive")}</i><span>الأرشيف</span></button>`);
   if(can("manage_users")) navItems.push(`<button data-nav="users" onclick="users()"><i class="navIcon">${navIcon("users")}</i><span>المستخدمون</span></button>`);
   if(can("view_audit_log")) navItems.push(`<button data-nav="audit" onclick="auditPage()"><i class="navIcon">${navIcon("audit")}</i><span>سجل النشاط</span></button>`);
+  const mobilePrimary=navItems.slice(0,3);
+  const mobileMore=navItems.slice(3);
+  const mobileMoreHtml=mobileMore.length?`<div id="mobileMoreMenu" class="mobileMoreMenu" hidden>${mobileMore.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}</div>`:"";
   app.innerHTML=`<div class="appShell">
     <main class="main">
       <header class="topbar">
@@ -258,14 +267,21 @@ function layout(u){
       <section id="view"></section>
       <footer class="appFooter"><span>Contract Control</span><b>V${APP_VERSION}</b><span>نظام متابعة العقود</span></footer>
     </main>
-    <nav class="mobileBar" aria-label="التنقل الرئيسي للجوال">${navItems.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}<button data-mnav="account" onclick="accountPage()" class="mobileAccountBtn"><span class="mobileUserDot">${esc(u.name?.[0]||"م")}</span><span>حسابي</span></button><button data-mnav="logout" onclick="logout()" class="mobileLogoutBtn"><span>↪</span><span>خروج</span></button></nav>
+    <nav class="mobileBar" aria-label="التنقل الرئيسي للجوال">${mobilePrimary.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}${mobileMore.length?`<button type="button" data-mnav="more" onclick="toggleMobileMore()" class="mobileMoreBtn"><span>⋯</span><span>المزيد</span></button>`:""}<button type="button" data-mnav="account" onclick="accountPage()" class="mobileAccountBtn"><span class="mobileUserDot">${esc(u.name?.[0]||"م")}</span><span>حسابي</span></button><button type="button" data-mnav="logout" onclick="logout()" class="mobileLogoutBtn"><span>↪</span><span>خروج</span></button></nav>${mobileMoreHtml}
   </div>`;
   dash();
 
 }
-function login(){
+function toggleMobileMore(){
+  const menu=document.querySelector('#mobileMoreMenu');
+  if(!menu)return;
+  const open=menu.hidden;
+  menu.hidden=!open;
+  document.querySelector('.mobileMoreBtn')?.classList.toggle('active',open);
+}
+function login(message=""){
   clearInterval(timerInterval);clearInterval(idleGuard);ME=null;
-  app.innerHTML=`<main class="loginPage"><div class="loginGlow"></div><section class="loginPanel"><div class="loginBrand"><div>CC</div><span>CONTROL CENTER</span></div><h1>متابعة العقود</h1><p>منصة داخلية لإدارة دورة المعاملة، المسؤوليات، الزمن، والتقارير.</p><form id="loginForm"><label>اسم المستخدم<input id="username" required autocomplete="username" placeholder="أدخل اسم المستخدم"></label><label>كلمة المرور<input id="password" type="password" required autocomplete="current-password" placeholder="••••••••"></label><button class="primary wide">الدخول إلى مركز التحكم</button><small id="loginError"></small></form><footer>نظام داخلي · Contract Control</footer></section></main>`;
+  app.innerHTML=`<main class="loginPage"><div class="loginGlow"></div><section class="loginPanel"><div class="loginBrand"><div>CC</div><span>CONTROL CENTER</span></div><h1>متابعة العقود</h1><p>منصة داخلية لإدارة دورة المعاملة، المسؤوليات، الزمن، والتقارير.</p><form id="loginForm"><label>اسم المستخدم<input id="username" required autocomplete="username" placeholder="أدخل اسم المستخدم"></label><label>كلمة المرور<input id="password" type="password" required autocomplete="current-password" placeholder="••••••••"></label><button class="primary wide">الدخول إلى مركز التحكم</button><small id="loginError">${esc(message)}</small></form><footer>نظام داخلي · Contract Control</footer></section></main>`;
   document.querySelector("#loginForm").onsubmit=async e=>{
     e.preventDefault(); loginError.textContent="";
     try{await api("/api/login",{method:"POST",body:JSON.stringify({username:username.value.trim(),password:password.value})});wireDatePickers();
@@ -748,7 +764,7 @@ async function revokeDelegation(id){try{await api(`/api/delegations/${id}`,{meth
 function accountPage(){
   VIEW="account";navActive("account");title("حسابي","إدارة بيانات الحساب وتغيير كلمة المرور.");
   const v=document.querySelector("#view");
-  v.innerHTML=`<section class="section accountSection"><div class="accountCard"><div class="accountIdentity"><span class="accountAvatar">${esc(ME?.name?.[0]||"م")}</span><div><span class="eyebrow">MY ACCOUNT</span><h2>${esc(ME?.name||"—")}</h2><p>${esc(ME?.username||"—")} · ${esc(roleLabel[ME?.role]||ME?.role||"—")}</p></div></div><div class="accountDivider"></div><form id="changePasswordForm" class="passwordForm"><div><h3>تغيير كلمة المرور</h3><p>استخدم كلمة المرور الحالية ثم اختر كلمة مرور جديدة لحسابك.</p></div><div class="formGrid"><label>كلمة المرور الحالية<input id="currentPassword" type="password" autocomplete="current-password" required></label><label>كلمة المرور الجديدة<input id="newPassword" type="password" autocomplete="new-password" minlength="8" required></label><label>تأكيد كلمة المرور الجديدة<input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label></div><div class="accountActions"><button class="primary" type="submit">تحديث كلمة المرور</button><button class="danger" type="button" onclick="logout()">تسجيل الخروج</button></div><p id="passwordMessage" class="formMessage"></p></form></div></section>`;
+  v.innerHTML=`<section class="section accountSection"><div class="accountCard"><div class="accountIdentity"><span class="accountAvatar">${esc(ME?.name?.[0]||"م")}</span><div><span class="eyebrow">MY ACCOUNT</span><h2>${esc(ME?.name||"—")}</h2><p>${esc(ME?.username||"—")} · ${esc(roleLabel[ME?.role]||ME?.role||"—")}</p></div></div><div class="accountDivider"></div><form id="changePasswordForm" class="passwordForm"><div><h3>تغيير كلمة المرور</h3><p>استخدم كلمة المرور الحالية ثم اختر كلمة مرور جديدة لحسابك.</p></div><div class="formGrid"><label>كلمة المرور الحالية<div class="passwordField"><input id="currentPassword" type="password" autocomplete="current-password" required><button type="button" class="passwordToggle" onclick="togglePassword('currentPassword',this)" aria-label="إظهار كلمة المرور">إظهار</button></div></label><label>كلمة المرور الجديدة<div class="passwordField"><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required><button type="button" class="passwordToggle" onclick="togglePassword('newPassword',this)" aria-label="إظهار كلمة المرور">إظهار</button></div></label><label>تأكيد كلمة المرور الجديدة<div class="passwordField"><input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required><button type="button" class="passwordToggle" onclick="togglePassword('confirmPassword',this)" aria-label="إظهار كلمة المرور">إظهار</button></div></label></div><div class="accountActions"><button class="primary" type="submit">تحديث كلمة المرور</button><button class="danger" type="button" onclick="logout()">تسجيل الخروج</button></div><p id="passwordMessage" class="formMessage"></p></form></div></section>`;
   document.querySelector("#changePasswordForm").onsubmit=changeOwnPassword;
 }
 async function changeOwnPassword(e){
@@ -773,7 +789,8 @@ async function loadAudit(){
 }
 async function exportAudit(){try{const d=await api("/api/audit/export");downloadRows(d.rows||[],"سجل_النشاط");}catch(e){toast(e.message,"err");}}
 async function refreshBadge(){if(ME?.role!=="responsible")return;try{const d=await api("/api/records?status=required");const b=document.querySelector("#reqBadge");if(b)b.textContent=d.records?.length||0;}catch{}}
-async function logout(){try{await api("/api/logout")}finally{ME=null;login();}}
+function togglePassword(id,button){const input=document.getElementById(id);if(!input)return;const show=input.type==="password";input.type=show?"text":"password";button.textContent=show?"إخفاء":"إظهار";button.setAttribute("aria-label",show?"إخفاء كلمة المرور":"إظهار كلمة المرور");}
+async function logout(){if(!confirm("هل أنت متأكد أنك تريد تسجيل الخروج؟"))return;try{await api("/api/logout")}finally{ME=null;login();}}
 document.addEventListener("pointerdown",e=>{
   const input=e.target.closest("input[type=date],input[type=datetime-local]");
   if(input){ try{ input.showPicker?.(); }catch{} return; }
@@ -781,7 +798,7 @@ document.addEventListener("pointerdown",e=>{
   const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
   if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
 });
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;window.toggleMobileMore=toggleMobileMore;window.togglePassword=togglePassword;
 boot();
 
 
