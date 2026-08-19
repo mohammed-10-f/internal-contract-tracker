@@ -1680,3 +1680,79 @@ label{font-size:10px;color:#68778a}
 @media(prefers-reduced-motion:reduce){
   .commandHero:before{animation:none}
 }
+
+/* ============================================================
+   V22 — VISUAL REBUILD / ENTERPRISE MOBILE-FIRST
+   ------------------------------------------------------------
+   A real visual system pass over V21. No business logic changes.
+   ============================================================ */
+:root{
+  --canvas:#f5f7fb;
+  --canvas-deep:#eef2f7;
+  --surface:#fff;
+  --line:#e4e9f1;
+  --line-soft:#edf1f5;
+  --ink-950:#081525;
+  --ink-900:#0d1d31;
+  --ink-800:#18324f;
+  --ink-700:#294767;
+  --slate-600:#59697e;
+  --slate-500:#748398;
+  --slate-400:#95a1b2;
+  --accent-700:#124c8b;
+  --accent-600:#1768b2;
+  --accent-500:#287bc7;
+  --accent-400:#5a9fe0;
+  --accent-100:#eaf3fc;
+  --accent-50:#f5f9fe;
+  --sh-xs:0 1px 2px rgba(13,29,49,.035);
+  --sh-sm:0 7px 22px rgba(13,29,49,.055);
+  --sh-md:0 14px 36px rgba(13,29,49,.075);
+  --sh-lg:0 24px 65px rgba(7,21,37,.15);
+}
+body{font-size:14px;background:var(--canvas)}
+.main{padding-left:clamp(18px,3.5vw,48px);padding-right:clamp(18px,3.5vw,48px)}
+.topbar{min-height:68px;margin-left:clamp(-48px,-3.5vw,-18px);margin-right:clamp(-48px,-3.5vw,-18px);padding-left:clamp(18px,3.5vw,48px);padding-right:clamp(18px,3.5vw,48px);background:#0b1a2d;box-shadow:0 1px 0 rgba(255,255,255,.045) inset,0 7px 24px rgba(6,18,32,.16)}
+.brandMark{width:40px;height:40px;border-radius:12px;box-shadow:0 8px 18px rgba(35,111,194,.22),inset 0 1px 0 rgba(255,255,255,.18)}
+.topNav{gap:5px}.topNav button{height:38px;border-radius:10px;padding:0 12px}.topNav button.active{background:rgba(255,255,255,.095);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.pageHeader{padding-top:30px;padding-bottom:20px}.pageHeader h1{font-size:28px;letter-spacing:-.04em}.pageHeader p{font-size:12px;color:#718198}
+.section{margin-top:27px}.sectionHead{margin-bottom:13px}.sectionHead h2{font-size:18px;letter-spacing:-.025em}.sectionHead p{font-size:11px}
+.sectionHead .eyebrow{font-size:9px;letter-spacing:.12em}
+.statCard{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-xs);min-height:98px;padding:16px;position:relative;overflow:hidden}
+.statCard:after{content:"";position:absolute;inset:auto 0 0 0;height:2px;background:var(--accent-500);opacity:.08}.statCard:hover{box-shadow:var(--sh-sm);transform:translateY(-2px)}
+.statIcon{width:36px;height:36px;border-radius:10px}.statCard small{font-size:10px}.statCard strong{font-size:24px;letter-spacing:-.02em}
+.commandHero{border-radius:22px;box-shadow:var(--sh-md);background:linear-gradient(135deg,#0a1a2c 0%,#102b47 100%);border:1px solid rgba(255,255,255,.055)}
+.commandHero:after{opacity:.22}.heroCopy h2{font-size:28px;letter-spacing:-.045em}.heroCopy p{color:#c4cfdd}.heroMetric{border-radius:16px;background:rgba(255,255,255,.065);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.filterBar{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--sh-xs);padding:10px}.filterBar input,.filterBar .appSelectButton{background:#fbfcfe;border-color:#e5eaf1}
+.v3-case-row{border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-xs);background:#fff}.v3-case-row:hover{border-color:#cbd9e8;box-shadow:var(--sh-sm)}
+.v3-case-number{background:#edf5fd;color:var(--accent-700);border:1px solid #e1edf9}
+.v3-action{border-radius:10px}.v3-open{border-radius:10px}
+.managerCard,.activityTable,.usersTable,.auditTable,.responsiblePulse,.statsSelectionBar,.performanceCompare,.performanceKpis .statCard{border-color:var(--line)!important;box-shadow:var(--sh-xs)!important}
+.managerCard{border-radius:16px}.activityTable,.usersTable,.auditTable{border-radius:16px}
+.recordModal{background:rgba(7,18,31,.52);backdrop-filter:blur(10px)}.recordSheet{background:#f5f7fa}.v4-identity,.v4-panel{border-color:var(--line);box-shadow:var(--sh-xs)}
+.modalShade{background:rgba(7,18,31,.52);backdrop-filter:blur(10px)}
+.userModal{width:min(880px,94vw);padding:0;overflow:hidden;border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh-lg);background:#f7f9fc}
+.userModal:before{content:"إدارة الوصول";display:block;padding:20px 24px 14px;background:#fff;border-bottom:1px solid var(--line);font-size:11px;font-family:var(--font-mono);font-weight:700;letter-spacing:.08em;color:var(--accent-600)}
+.userModal h2{padding:16px 24px 0;margin:0;font-size:21px}.userModal>.formGrid{margin:14px 24px 0;background:#fff;border-radius:15px;padding:16px}
+.permGrid{padding:0 24px;margin:14px 0;gap:8px}.permCheck{min-height:46px;border-radius:11px}.userFormActions{bottom:0;padding:14px 24px 20px;background:rgba(247,249,252,.96);border-top:1px solid var(--line);margin-top:14px}.userFormActions .primary{height:44px;border-radius:12px}
+.userRow{padding:15px 18px}.usersHead{padding:12px 18px}.rowActions button{border-radius:9px}
+.delegationCreate{border-radius:16px;border-color:var(--line);box-shadow:var(--sh-xs)}.delegationTable{border-color:var(--line);box-shadow:var(--sh-xs)}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--slate-500);font-size:11px}.loadingSpinner,.btnSpinner{width:17px;height:17px;border:2px solid #dbe5ef;border-top-color:var(--accent-500);border-radius:50%;animation:v22spin .7s linear infinite}.btnSpinner{width:14px;height:14px;border-color:rgba(255,255,255,.35);border-top-color:#fff;display:inline-block;vertical-align:-2px;margin-left:6px}@keyframes v22spin{to{transform:rotate(360deg)}}.primary.isLoading{pointer-events:none;opacity:.85}
+.delegationLoading,.delegationError{min-height:96px;display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;color:var(--slate-500);font-size:10px;padding:18px}.delegationError{flex-direction:column}.delegationError b{color:var(--danger-700)}
+.emptyRow{padding:35px;text-align:center;color:var(--slate-400);font-size:11px}
+
+@media(max-width:900px){
+  body{font-size:13px}.main{padding-left:12px!important;padding-right:12px!important;padding-bottom:96px!important}
+  .topbar{margin-left:-12px!important;margin-right:-12px!important;min-height:58px!important;padding:8px 12px!important}
+  .pageHeader{padding:19px 2px 12px!important}.pageHeader h1{font-size:22px!important}.section{margin-top:22px}.sectionHead h2{font-size:16px}
+  .commandHero{border-radius:18px;padding:20px 16px}.heroCopy h2{font-size:23px}.heroCopy p{font-size:10.5px}.heroMetric{border-radius:13px}
+  .statsGrid{gap:8px}.statCard{min-height:88px;border-radius:14px;padding:12px}.statCard strong{font-size:20px}.statCard small{font-size:8.7px}
+  .filterBar{border-radius:13px}.v3-case-row{border-radius:14px}
+  .userModal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:18px}.userModal:before{padding:16px 16px 12px}.userModal h2{padding:14px 16px 0;font-size:18px}.userModal>.formGrid{margin:12px 12px 0;padding:11px}.permGrid{padding:0 12px;margin:11px 0;grid-template-columns:1fr!important}.userFormActions{padding:11px 12px calc(12px + env(safe-area-inset-bottom));margin-top:10px}.userFormActions .primary{height:45px}
+  .usersTable{overflow:visible;border-radius:14px}.usersHead{display:none}.userRow{display:grid;grid-template-columns:1fr auto;gap:9px;padding:13px;border-top:1px solid var(--line-soft);align-items:start}.userRow>span{font-size:9px}.userIdentity{grid-column:1/-1}.rowActions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}.rowActions button{min-width:0;height:37px}.rowActions button:first-child{grid-column:1/-1}
+  .delegationCreate{grid-template-columns:1fr!important;padding:12px;gap:8px;border-radius:14px}.delegationCreate .wide{grid-column:auto}.delegationRow{grid-template-columns:1fr auto;gap:7px;padding:12px}.delegationRow>small{grid-column:1/-1}.delegationRow>.danger{grid-column:2;grid-row:1}
+  .mobileBar{left:9px!important;right:9px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important}
+}
+@media(max-width:520px){
+  .main{padding-left:10px!important;padding-right:10px!important}.topbar{margin-left:-10px!important;margin-right:-10px!important}.pageHeader h1{font-size:20px!important}.statsGrid{grid-template-columns:1fr 1fr!important}.statCard{min-height:82px;padding:10px}.statCard strong{font-size:18px}.statIcon{width:31px;height:31px}.commandHero{padding:18px 14px}.heroCopy h2{font-size:21px}.heroActions{grid-template-columns:1fr}.mobileBar{left:7px!important;right:7px!important}
+}
