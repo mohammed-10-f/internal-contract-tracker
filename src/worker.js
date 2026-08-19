@@ -455,31 +455,36 @@ return json({record:withMeta(r),events:ev.results,stages})}
  }
  if(p==="/api/manager-stats"&&req.method==="GET"){
   if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
-  const requested=Number(url.searchParams.get("manager_id")||0),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
-  const managerId=u.role==="responsible"?u.id:requested;
-  if(u.role==="responsible"&&managerId!==u.id)return json({error:"غير مصرح"},403);
-  if(!managerId)return json({error:"اختر المستخدم المسؤول"},400);
-  const manager=await env.DB.prepare("SELECT id,name,username,role FROM users WHERE id=? AND active=1 AND role='responsible'").bind(managerId).first();
-  if(!manager)return json({error:"المستخدم المسؤول غير موجود أو غير نشط"},404);
-  const dateParts=[]; if(from)dateParts.push("r.created_at>=?"); if(to)dateParts.push("r.created_at<=?");
-  const dateSql=dateParts.length?" AND "+dateParts.join(" AND "):""; const dateArgs=[]; if(from)dateArgs.push(from+" 00:00:00"); if(to)dateArgs.push(to+" 23:59:59");
-  const touchedSql=`SELECT DISTINCT r.id,r.status FROM records r JOIN record_stages rs ON rs.record_id=r.id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql}`;
-  const touched=await env.DB.prepare(touchedSql).bind(managerId,...dateArgs).all();
-  const rows=touched.results||[];
-  const total=rows.length, documented=rows.filter(r=>r.status==='final_documented').length, withdrawn=rows.filter(r=>r.status==='final_withdrawn').length;
-  const overdueStage=await env.DB.prepare(`SELECT rs.record_id,SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400) seconds
-    FROM record_stages rs JOIN records r ON r.id=rs.record_id
-    WHERE rs.stage='responsible' AND rs.user_id=?${dateSql}
-    GROUP BY rs.record_id HAVING seconds>=?`).bind(managerId,...dateArgs,SLA_HOURS*3600).all();
-  const delayedIds=new Set((overdueStage.results||[]).map(x=>Number(x.record_id)));
-  const overdue=delayedIds.size;
+  const requestedRaw=String(url.searchParams.get("manager_id")||"").trim(),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
+  const isAll=requestedRaw.toLowerCase()==="all";
+  if(u.role==="responsible" && (isAll || Number(requestedRaw||u.id)!==u.id))return json({error:"غير مصرح"},403);
+  if(!requestedRaw && u.role!=="responsible")return json({error:"اختر المستخدم المسؤول"},400);
+  const dateParts=[];if(from)dateParts.push("r.created_at>=?");if(to)dateParts.push("r.created_at<=?");
+  const dateSql=dateParts.length?" AND "+dateParts.join(" AND "):"";const dateArgs=[];if(from)dateArgs.push(from+" 00:00:00");if(to)dateArgs.push(to+" 23:59:59");
+  const touchedSql=(userExpr)=>`SELECT DISTINCT r.id,r.status FROM records r JOIN record_stages rs ON rs.record_id=r.id WHERE rs.stage='responsible' ${userExpr}${dateSql}`;
+  let rows=[],manager;
+  if(isAll){
+    rows=(await env.DB.prepare(touchedSql("")).bind(...dateArgs).all()).results||[];
+    manager={id:0,name:"جميع المسؤولين",username:"all",role:"aggregate"};
+  }else{
+    const managerId=u.role==="responsible"?u.id:Number(requestedRaw);
+    if(!managerId)return json({error:"اختر المستخدم المسؤول"},400);
+    manager=await env.DB.prepare("SELECT id,name,username,role FROM users WHERE id=? AND active=1 AND role='responsible'").bind(managerId).first();
+    if(!manager)return json({error:"المستخدم المسؤول غير موجود أو غير نشط"},404);
+    rows=(await env.DB.prepare(touchedSql(" AND rs.user_id=?")).bind(managerId,...dateArgs).all()).results||[];
+  }
+  const total=rows.length,documented=rows.filter(r=>r.status==='final_documented').length,withdrawn=rows.filter(r=>r.status==='final_withdrawn').length;
+  const overdueSql=`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' ${isAll?'':' AND rs.user_id=?'}${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`;
+  const overdueArgs=isAll?[...dateArgs,SLA_HOURS*3600]:[Number(manager.id),...dateArgs,SLA_HOURS*3600];
+  const overdueStage=await env.DB.prepare(overdueSql).bind(...overdueArgs).all();
+  const delayedIds=new Set((overdueStage.results||[]).map(x=>Number(x.record_id)));const overdue=delayedIds.size;
   const closedAfterDelay=rows.filter(r=>delayedIds.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length;
-
-  const users=(await env.DB.prepare("SELECT id,name,username,role FROM users WHERE active=1 AND role='responsible' ORDER BY name").all()).results;
+  const users=(await env.DB.prepare("SELECT id,name,username,role FROM users WHERE active=1 AND role='responsible' ORDER BY name").all()).results||[];
   const comparison=[];
   for(const person of users){
-    const pr=await env.DB.prepare(touchedSql).bind(person.id,...dateArgs).all();
-    const prows=pr.results||[]; const pdel=await env.DB.prepare(`SELECT rs.record_id,SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400) seconds FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING seconds>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
+    const pr=await env.DB.prepare(touchedSql(" AND rs.user_id=?")).bind(person.id,...dateArgs).all();
+    const prows=pr.results||[];
+    const pdel=await env.DB.prepare(`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
     const ids=new Set((pdel.results||[]).map(x=>Number(x.record_id)));
     comparison.push({id:person.id,name:person.name,username:person.username,role:person.role,total:prows.length,documented:prows.filter(r=>r.status==='final_documented').length,withdrawn:prows.filter(r=>r.status==='final_withdrawn').length,overdue:ids.size,closed_after_delay:prows.filter(r=>ids.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length});
   }

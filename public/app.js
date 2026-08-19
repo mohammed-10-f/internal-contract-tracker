@@ -210,7 +210,7 @@ function icon(type){return ({blue:"◷",green:"✓",orange:"!",red:"×",purple:"
 function navIcon(name){
  const m={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5.2v-6h-5.6v6H4a1 1 0 0 1-1-1z"/></svg>',records:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',upload:'<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',stats:'<svg viewBox="0 0 24 24"><path d="M5 19V10M12 19V5M19 19v-8"/></svg>',archive:'<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM3 4h18v3H3zM9 11h6"/></svg>',users:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 5.5a3 3 0 0 1 0 5.8M16 14a5 5 0 0 1 4.5 6"/></svg>',responsibles:'<svg viewBox="0 0 24 24"><path d="M5 4h6v6H5zM13 14h6v6h-6zM13 4h6v6h-6zM5 14h6v6H5z"/></svg>',audit:'<svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>'};return m[name]||m.records;}
 function stat(label,value,type="blue",sub=""){return `<div class="statCard"><span class="statIcon ${type}">${icon(type)}</span><div><small>${esc(label)}</small><strong>${value}</strong>${sub?`<em>${esc(sub)}</em>`:""}</div></div>`;}
-function navActive(key){document.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("active",x.dataset.nav===key));}
+function navActive(key){document.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("active",x.dataset.nav===key));document.querySelectorAll("[data-mnav]").forEach(x=>x.classList.toggle("active",x.dataset.mnav===key));}
 function enhanceSelects(root=document){
   const scope=root.querySelectorAll?root:document;
   scope.querySelectorAll('select:not([data-enhanced="1"])').forEach(sel=>{
@@ -258,12 +258,7 @@ function layout(u){
       <section id="view"></section>
       <footer class="appFooter"><span>Contract Control</span><b>V${APP_VERSION}</b><span>نظام متابعة العقود</span></footer>
     </main>
-    <div class="mobileBar">
-      <button data-mnav="home" onclick="dash()">${navIcon("home")}<span>الرئيسية</span></button>
-      <button data-mnav="records" onclick="list()">${navIcon("records")}<span>المعاملات</span></button>
-${u.role==="responsible"?`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>أدائي</span></button>`:`<button data-mnav="stats" onclick="statsPage()">${navIcon("stats")}<span>تحليل</span></button>`}
-      ${can("manage_users")?`<button data-mnav="users" onclick="users()">${navIcon("users")}<span>المستخدمون</span></button>`:""}
-    </div>
+    <nav class="mobileBar" aria-label="التنقل الرئيسي للجوال">${navItems.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}</nav>
   </div>`;
   dash();
 
@@ -366,7 +361,7 @@ function recordCard(r){
   const status=statusLabel[r.status]||r.status||"—";
   const waitingAt=(r.status==="waiting_responsible"||r.status==="returned")?(r.responsible_user_name||"المسؤول"):"";
   const primary=canResponsible
-    ? `<button class="v3-action primaryAction" onclick="quickResponsible(${r.id})">إفادة</button>`
+    ? `<div class="v3-direct-actions"><button class="v3-action withdrawAction" onclick="quickResponsibleWithdraw(${r.id})">منسحب</button><button class="v3-action documentAction" onclick="quickResponsibleSubmit(${r.id},'documented')">تم التوثيق</button></div>`
     : canApprove
       ? `<button class="v3-action primaryAction" onclick="quickApprove(${r.id},'${r.status}')">اعتماد</button>`
       : "";
@@ -671,23 +666,27 @@ async function statsPage(managerId=""){
   try{
     const [usersData]=await Promise.all([api("/api/stats-users?_="+Date.now())]);
     const users=usersData.users||[];
-    const storedUser=Number(localStorage.getItem("statsUserId")||0);
-    const selectedId=ME.role==="responsible"?Number(ME.id):Number(managerId||storedUser||users[0]?.id||0);
+    const canCompare=ME.role!=="responsible" && can("view_stats");
+    const storedUser=localStorage.getItem("statsUserId")||"";
+    let selectedKey=managerId!==""?String(managerId):(storedUser||(!canCompare&&ME.role==="responsible"?String(ME.id):String(users[0]?.id||"")));
+    if(canCompare && !selectedKey) selectedKey="all";
+    if(!canCompare) selectedKey=String(ME.id);
     const from=localStorage.getItem("statsFrom")||"",to=localStorage.getItem("statsTo")||"";
-    if(!selectedId)throw Error("لا يوجد مستخدم مسؤول لعرض إحصائياته.");
-    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:String(selectedId),from,to}).toString()}`);
-    const options=users.map(x=>`<option value="${x.id}" ${Number(x.id)===selectedId?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("");
-    const compareRows=(d.comparison||[]).map(x=>`<button class="performanceCompareRow ${Number(x.id)===Number(d.manager.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("");
+    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selectedKey,from,to}).toString()}`);
+    const options=canCompare
+      ? `<option value="all" ${selectedKey==="all"?'selected':''}>الكل</option>${users.map(x=>`<option value="${x.id}" ${String(x.id)===selectedKey?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("")}`
+      : "";
+    const compareRows=canCompare ? (d.comparison||[]).map(x=>`<button class="performanceCompareRow ${String(x.id)===String(d.manager?.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("") : "";
     v.innerHTML=`<section class="section performancePage">
-      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">المستخدم</span>${ME.role==="responsible"?`<strong>${esc(d.manager.name)}</strong>`:`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`}</div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${Number(d.manager.id)||0})">تطبيق</button></div></div>
+      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}</div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${JSON.stringify(selectedKey)})">تطبيق</button></div></div>
       <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div>
-      <section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${from||"—"} → ${to||"—"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}</div></section>
+      ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${from&&to?`${esc(from)} → ${esc(to)}`:"الفترة المحددة"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}</div></section>`:""}
     </section>`;
     enhanceSelects(v);
   }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
-function selectStatsUser(id){localStorage.setItem("statsUserId",String(id||""));statsPage(String(id||""));}
-function applyStats(id){localStorage.setItem("statsFrom",document.querySelector("#statsFrom")?.value||"");localStorage.setItem("statsTo",document.querySelector("#statsTo")?.value||"");localStorage.setItem("statsUserId",String(id||document.querySelector("#statsUser")?.value||""));statsPage(String(id||document.querySelector("#statsUser")?.value||""));}
+function selectStatsUser(id){localStorage.setItem("statsUserId",String(id||"all"));statsPage(String(id||"all"));}
+function applyStats(id){const from=document.querySelector("#statsFrom")?.value||"",to=document.querySelector("#statsTo")?.value||"";localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");localStorage.setItem("statsUserId",selected);statsPage(selected);}
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
 async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}

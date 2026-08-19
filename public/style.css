@@ -1234,3 +1234,75 @@ select{
 
 @media(max-width:980px){.commandSignals{grid-template-columns:repeat(2,minmax(0,1fr))}.commandColumns{grid-template-columns:1fr}.statsSelectionBar{align-items:stretch;flex-direction:column}.statsPeriod{grid-template-columns:1fr 1fr auto}.permGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
 @media(max-width:650px){.commandWelcome{align-items:flex-start;flex-direction:column}.commandActions{width:100%}.commandActions button{flex:1}.commandSignals{grid-template-columns:1fr 1fr}.commandTask{grid-template-columns:1fr auto}.commandTaskState{grid-column:1}.commandTaskAction{grid-column:2;grid-row:1 / span 2}.statsPeriod{grid-template-columns:1fr 1fr}.statsPeriod .primary{grid-column:1 / -1}.permGrid{grid-template-columns:1fr}.recordInlineDetails{margin-left:0;margin-right:0}.recordInlineDetails .v4-identity{align-items:flex-start;flex-direction:column}.recordInlineDetails .v4-identity-status{align-items:flex-start}.recordInlineDetails .v4-close{position:relative;top:auto;left:auto;margin-bottom:10px}}
+
+/* V20.3 mobile navigation + interaction refinements */
+.v3-direct-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap}
+.v3-direct-actions .v3-action{min-width:78px}
+.v3-direct-actions .withdrawAction{border-color:#f0caca;background:#fff7f7;color:#a63d3d}
+.v3-direct-actions .documentAction{border-color:#bfe4d2;background:#f4fbf7;color:#19724b}
+.v3-direct-actions .v3-action:hover{transform:translateY(-1px)}
+
+@media(max-width:760px){
+  /* One navigation only: bottom navigation controls the whole mobile app. */
+  .topNav{display:none!important}
+  .topbar{padding:9px 12px;min-height:58px}
+  .topBrand>div:not(.brandMark),.topBrand small{display:none}
+  .topBrand .brandMark{margin:0}
+  .topActions{gap:6px}
+  .topActions .connection{display:none}
+  .logoutTop{font-size:10px!important;padding:0 10px!important;height:34px!important}
+  .avatarTop{width:34px!important;height:34px!important}
+  .pageHeader{padding:16px 14px 10px;gap:8px}
+  .pageHeader h1{font-size:20px}
+  .pageHeader p{display:none}
+  .workspacePill{display:none}
+  .main{padding-bottom:92px}
+
+  .mobileBar{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(64px,1fr);gap:5px;overflow-x:auto;overflow-y:hidden;padding:8px max(10px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));}
+  .mobileBar button{min-width:64px;height:54px;padding:6px 5px;border-radius:13px;font-size:8.5px;gap:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;white-space:nowrap}
+  .mobileBar button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .mobileBar button.active{background:var(--accent-600);color:#fff;box-shadow:0 8px 20px rgba(18,86,150,.2)}
+
+  /* Native date controls stay inside the card on small screens. */
+  input[type="date"],input[type="datetime-local"]{width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:12px;padding-inline:9px}
+  .statsSelectionBar{padding:14px;gap:12px}
+  .statsSelectionUser{min-width:0;width:100%}
+  .statsSelectionUser .appSelect{width:100%}
+  .statsPeriod{grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .statsPeriod label{min-width:0}
+  .statsPeriod .primary{grid-column:1/-1;width:100%}
+  .performanceKpis{grid-template-columns:1fr 1fr!important}
+  .performanceKpis .statCard:last-child{grid-column:1/-1}
+
+  .filterBar{grid-template-columns:1fr!important;gap:8px;padding:10px}
+  .filterBar>*{grid-column:auto!important;min-width:0;width:100%;box-sizing:border-box}
+  .filterBar .appSelect,.filterBar input,.filterBar button{width:100%;min-width:0}
+
+  .v3-case-row{grid-template-columns:1fr;gap:10px;padding:13px 12px}
+  .v3-case-type,.v3-case-assignee,.v3-case-status{width:100%;min-width:0}
+  .v3-case-action{width:100%;display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}
+  .v3-direct-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .v3-direct-actions .v3-action{width:100%;min-width:0}
+  .v3-case-action .detailsAction{grid-column:1/-1;width:100%}
+  .v3-open{display:none}
+
+  .recordInlineDetails{margin:0 0 14px;border-radius:0 0 18px 18px}
+  .recordInlineDetails .recordSheet{padding:14px 12px 18px}
+  .recordInlineDetails .v4-identity{padding:14px!important;gap:12px}
+  .recordInlineDetails .v4-body{grid-template-columns:1fr!important;gap:10px}
+  .recordInlineDetails .v4-panel{padding:13px;border-radius:14px}
+  .recordInlineDetails .v4-identity-main{min-width:0}
+  .recordInlineDetails .v4-identity-main>div:last-child{min-width:0}
+  .recordInlineDetails .v4-identity-main h2{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68vw}
+
+  .commandSignals{grid-template-columns:1fr 1fr!important}
+  .commandTask{grid-template-columns:1fr!important}
+  .commandTaskAction{grid-column:auto;grid-row:auto;width:100%}
+
+  .permGrid{grid-template-columns:1fr!important;gap:7px}
+  .userModal{width:calc(100vw - 20px);max-height:calc(100vh - 20px);padding:14px;border-radius:18px}
+  .userModal>.formGrid{padding:10px}
+  .permCheck{min-height:44px}
+
+  .appSelectMenu{max-height:45vh;overscroll-behavior:contain}
+}
