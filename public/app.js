@@ -252,13 +252,13 @@ function layout(u){
       <header class="topbar">
         <div class="topBrand"><div class="brandMark">CC</div><div><strong>متابعة العقود</strong><small>Contract Control</small></div></div>
         <nav class="topNav">${navItems.join("")}</nav>
-        <div class="topActions"><div class="connection"><i></i> متصل</div><button class="avatarTop" onclick="${admin?"users()":"dash()"}">${esc(u.name?.[0]||"م")}</button><button class="logoutTop" onclick="logout()">خروج</button></div>
+        <div class="topActions"><div class="connection"><i></i> متصل</div><button class="avatarTop" onclick="accountPage()" title="حسابي" aria-label="حسابي">${esc(u.name?.[0]||"م")}</button><button class="logoutTop" onclick="logout()">خروج</button></div>
       </header>
       <div class="pageHeader"><div><span class="eyebrow">نظام متابعة المعاملات</span><h1 id="pageTitle">الرئيسية</h1><p id="pageSub"></p></div><div class="workspacePill">${u.role==="responsible"?"مسؤولك":"المركز الرئيسي"}</div></div>
       <section id="view"></section>
       <footer class="appFooter"><span>Contract Control</span><b>V${APP_VERSION}</b><span>نظام متابعة العقود</span></footer>
     </main>
-    <nav class="mobileBar" aria-label="التنقل الرئيسي للجوال">${navItems.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}</nav>
+    <nav class="mobileBar" aria-label="التنقل الرئيسي للجوال">${navItems.map(x=>x.replace(/data-nav=/,'data-mnav=').replace(/<i class="navIcon">/,'').replace(/<\/i>/,'')).join("")}<button data-mnav="account" onclick="accountPage()" class="mobileAccountBtn"><span class="mobileUserDot">${esc(u.name?.[0]||"م")}</span><span>حسابي</span></button><button data-mnav="logout" onclick="logout()" class="mobileLogoutBtn"><span>↪</span><span>خروج</span></button></nav>
   </div>`;
   dash();
 
@@ -711,10 +711,21 @@ function userForm(x={role:"requester",permissions:roleDefaults.requester}){
 function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); }
 async function saveUser(id){
   const modal=document.querySelector(".userModal"); if(!modal)return;
+  const saveBtn=modal.querySelector(".userFormActions button");
+  if(saveBtn?.disabled)return;
   const username=modal.querySelector("#fu")?.value.trim()||"", name=modal.querySelector("#fn")?.value.trim()||"", password=modal.querySelector("#fp")?.value||"", role=modal.querySelector("#fr")?.value||"requester";
   const permissions=[...modal.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value);
   if(!username||!name)return toast("أكمل اسم المستخدم والاسم","err");
-  try{const b={name,role,permissions};if(!id)b.username=username;if(password)b.password=password;if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});modal.remove();toast("تم حفظ المستخدم");users();}catch(e){toast(e.message,"err");}
+  try{
+    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent="جاري الحفظ…";saveBtn.classList.add("isLoading");}
+    const b={name,role,permissions};if(!id)b.username=username;if(password)b.password=password;
+    if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});
+    else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});
+    modal.remove();toast("تم حفظ المستخدم");await users();
+  }catch(e){
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="حفظ التغييرات";saveBtn.classList.remove("isLoading");}
+    toast(e.message,"err");
+  }
 }
 async function clearTestData(){
   const ok=prompt("هذا الإجراء يحذف المعاملات والمستخدمين التجريبيين والجلسات والتفويضات. اكتب RESET للتأكيد:");
@@ -734,6 +745,24 @@ async function createDelegation(){
   try{await api("/api/delegations",{method:"POST",body:JSON.stringify({source_user_id:source,target_user_id:target,starts_at:document.querySelector("#delStart").value||null,ends_at:document.querySelector("#delEnd").value||null,note:document.querySelector("#delNote").value||""})});toast("تم تفعيل التفويض");users();}catch(e){toast(e.message,"err");}
 }
 async function revokeDelegation(id){try{await api(`/api/delegations/${id}`,{method:"POST",body:JSON.stringify({action:"revoke"})});toast("تم إلغاء التفويض");users();}catch(e){toast(e.message,"err");}}
+function accountPage(){
+  VIEW="account";navActive("account");title("حسابي","إدارة بيانات الحساب وتغيير كلمة المرور.");
+  const v=document.querySelector("#view");
+  v.innerHTML=`<section class="section accountSection"><div class="accountCard"><div class="accountIdentity"><span class="accountAvatar">${esc(ME?.name?.[0]||"م")}</span><div><span class="eyebrow">MY ACCOUNT</span><h2>${esc(ME?.name||"—")}</h2><p>${esc(ME?.username||"—")} · ${esc(roleLabel[ME?.role]||ME?.role||"—")}</p></div></div><div class="accountDivider"></div><form id="changePasswordForm" class="passwordForm"><div><h3>تغيير كلمة المرور</h3><p>استخدم كلمة المرور الحالية ثم اختر كلمة مرور جديدة لحسابك.</p></div><div class="formGrid"><label>كلمة المرور الحالية<input id="currentPassword" type="password" autocomplete="current-password" required></label><label>كلمة المرور الجديدة<input id="newPassword" type="password" autocomplete="new-password" minlength="8" required></label><label>تأكيد كلمة المرور الجديدة<input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label></div><div class="accountActions"><button class="primary" type="submit">تحديث كلمة المرور</button><button class="danger" type="button" onclick="logout()">تسجيل الخروج</button></div><p id="passwordMessage" class="formMessage"></p></form></div></section>`;
+  document.querySelector("#changePasswordForm").onsubmit=changeOwnPassword;
+}
+async function changeOwnPassword(e){
+  e.preventDefault(); const form=e.currentTarget,btn=form.querySelector('button[type="submit"]'),msg=form.querySelector('#passwordMessage');
+  const current_password=form.querySelector('#currentPassword').value,password=form.querySelector('#newPassword').value,confirm=form.querySelector('#confirmPassword').value;
+  msg.className="formMessage";msg.textContent="";
+  if(password.length<8){msg.classList.add("err");msg.textContent="كلمة المرور الجديدة يجب ألا تقل عن 8 أحرف.";return;}
+  if(password!==confirm){msg.classList.add("err");msg.textContent="تأكيد كلمة المرور غير مطابق.";return;}
+  btn.disabled=true;btn.textContent="جاري التحديث…";
+  try{await api('/api/password',{method:'POST',body:JSON.stringify({current_password,password})});msg.classList.add('ok');msg.textContent='تم تغيير كلمة المرور بنجاح.';form.reset();toast('تم تغيير كلمة المرور');}
+  catch(err){msg.classList.add('err');msg.textContent=err.message||'تعذر تغيير كلمة المرور.';}
+  finally{btn.disabled=false;btn.textContent='تحديث كلمة المرور';}
+}
+
 async function auditPage(){
   if(!can("view_audit_log")){toast("لا تملك صلاحية سجل النشاط","err");return}
   VIEW="audit";navActive("audit");title("سجل النشاط","سجل تدقيق كامل قابل للبحث والتصفية والتصدير.");

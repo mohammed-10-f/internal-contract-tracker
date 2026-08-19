@@ -524,7 +524,7 @@ if(u.role==="requester"){esql+=" AND r.requester_id=?";ea.push(u.id)}if(status){
   await log(env,null,u.id,"إعادة تعيين كلمة مرور",target.name);
   return json({ok:true,temporary_password:temporary});
  }
- if(p==="/api/password"&&req.method==="POST"){const b=await req.json();if(!b.password)return json({error:"أدخل الرمز الجديد"},400);await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hash(b.password),u.id).run();return json({ok:true})}
+ if(p==="/api/password"&&req.method==="POST"){const b=await req.json();if(!b.current_password||!b.password)return json({error:"أدخل كلمة المرور الحالية والجديدة"},400);if(String(b.password).length<8)return json({error:"كلمة المرور الجديدة يجب ألا تقل عن 8 أحرف"},400);if(await hash(String(b.current_password))!==u.password_hash)return json({error:"كلمة المرور الحالية غير صحيحة"},400);await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hash(String(b.password)),u.id).run();await log(env,null,u.id,"تغيير كلمة المرور","تغيير كلمة المرور من الحساب");return json({ok:true})}
  if(p==="/template.xlsx"||p==="/contract_upload_template.xlsx"){const asset=await env.ASSETS.fetch(new Request(new URL("/contract_upload_template.xlsx",url)));if(!asset.ok)return asset;const h=new Headers(asset.headers);h.set("content-disposition",'attachment; filename="contract_upload_template.xlsx"');h.set("content-type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");return new Response(asset.body,{status:asset.status,headers:h});}
  if(!p.startsWith("/api/"))return env.ASSETS.fetch(req);return json({error:"غير موجود"},404);
 }}
