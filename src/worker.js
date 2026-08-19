@@ -86,7 +86,7 @@ function buildResponsibleManagerBuckets(records){
   return out;
 }
 
-const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=23;
+const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=24;
 const dashboardCache=new Map();
 let schemaReady=null;
 const seenSessions=new Map();
@@ -111,7 +111,7 @@ const ROLE_DEFAULTS={
  viewer:["view_records"]
 };
 const json=(x,s=200,h={})=>new Response(JSON.stringify(x),{status:s,headers:{"content-type":"application/json;charset=utf-8",...h}});
-const PBKDF2_ITERATIONS=120000;
+const PBKDF2_ITERATIONS=100000;
 const bytesToB64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
 const b64ToBytes=s=>{const t=String(s).replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(String(s).length/4)*4,"=");const bin=atob(t);return Uint8Array.from(bin,c=>c.charCodeAt(0));};
 const legacyHash=async p=>{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(p));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")};
@@ -164,6 +164,10 @@ function allowRoleFallback(u,p){if(!u)return false;if(allow(u,p))return true;con
 async function ensureSchema(env){
  if(schemaReady) return schemaReady;
  schemaReady=(async()=>{
+  // Recover from an interrupted table migration before creating base tables.
+  const exists=async name=>{const r=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").bind(name).first();return !!r};
+  if(!(await exists('users')) && await exists('users_v20')) await env.DB.prepare('ALTER TABLE users_v20 RENAME TO users').run();
+  if(!(await exists('records')) && await exists('records_v20')) await env.DB.prepare('ALTER TABLE records_v20 RENAME TO records').run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,name TEXT NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'viewer',permissions TEXT DEFAULT '',active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS records (id INTEGER PRIMARY KEY AUTOINCREMENT,employee_no TEXT NOT NULL,employee_name TEXT NOT NULL,start_date TEXT NOT NULL,transaction_no TEXT,transaction_date TEXT,interruption_transaction_no TEXT,end_date TEXT,status TEXT NOT NULL DEFAULT 'waiting_responsible',requester_id INTEGER NOT NULL,responsible_user_id INTEGER,responsible_note TEXT,requester_note TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,responsible_responded_at TEXT,final_approved_at TEXT,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,timer_paused_at TEXT,timer_end_at TEXT,paused_seconds INTEGER NOT NULL DEFAULT 0,stage_started_at TEXT,original_responsible_user_id INTEGER,delegated_from_user_id INTEGER,delegated_at TEXT,stopped_at TEXT,stopped_by INTEGER,completed_at TEXT,delegated_to_user_id INTEGER)`).run();
@@ -189,11 +193,13 @@ async function ensureSchema(env){
   await env.DB.prepare("UPDATE record_stages SET stage='responsible' WHERE stage='region'").run();
   await env.DB.prepare("UPDATE audit_log SET action=REPLACE(REPLACE(REPLACE(action,'الإقليم','المسؤول'),'إقليم','مسؤول'),'اقليم','مسؤول'),note=REPLACE(REPLACE(REPLACE(note,'الإقليم','المسؤول'),'إقليم','مسؤول'),'اقليم','مسؤول')").run();
   if(legacyUserRegion){
+   await env.DB.prepare('DROP TABLE IF EXISTS users_v20').run();
    await env.DB.prepare(`CREATE TABLE users_v20 (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,name TEXT NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'viewer',permissions TEXT DEFAULT '',active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
    await env.DB.prepare(`INSERT INTO users_v20(id,username,name,password_hash,role,permissions,active,created_at) SELECT id,username,name,password_hash,role,COALESCE(permissions,''),active,created_at FROM users`).run();
    await env.DB.prepare('DROP TABLE users').run(); await env.DB.prepare('ALTER TABLE users_v20 RENAME TO users').run();
   }
   if(legacyRecordRegion){
+   await env.DB.prepare('DROP TABLE IF EXISTS records_v20').run();
    await env.DB.prepare(`CREATE TABLE records_v20 (id INTEGER PRIMARY KEY AUTOINCREMENT,employee_no TEXT NOT NULL,employee_name TEXT NOT NULL,start_date TEXT NOT NULL,transaction_no TEXT,transaction_date TEXT,interruption_transaction_no TEXT,end_date TEXT,status TEXT NOT NULL DEFAULT 'waiting_responsible',requester_id INTEGER NOT NULL,responsible_user_id INTEGER,responsible_note TEXT,requester_note TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,responsible_responded_at TEXT,final_approved_at TEXT,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,timer_paused_at TEXT,timer_end_at TEXT,paused_seconds INTEGER NOT NULL DEFAULT 0,stage_started_at TEXT,original_responsible_user_id INTEGER,delegated_from_user_id INTEGER,delegated_at TEXT,stopped_at TEXT,stopped_by INTEGER,completed_at TEXT,delegated_to_user_id INTEGER)`).run();
    await env.DB.prepare(`INSERT INTO records_v20(id,employee_no,employee_name,start_date,transaction_no,transaction_date,interruption_transaction_no,end_date,status,requester_id,responsible_user_id,responsible_note,requester_note,created_at,responsible_responded_at,final_approved_at,updated_at,timer_paused_at,timer_end_at,paused_seconds,stage_started_at,original_responsible_user_id,delegated_from_user_id,delegated_at,stopped_at,stopped_by,completed_at,delegated_to_user_id) SELECT id,employee_no,employee_name,start_date,transaction_no,transaction_date,interruption_transaction_no,end_date,status,requester_id,responsible_user_id,responsible_note,requester_note,created_at,responsible_responded_at,final_approved_at,updated_at,timer_paused_at,timer_end_at,paused_seconds,stage_started_at,original_responsible_user_id,delegated_from_user_id,delegated_at,stopped_at,stopped_by,completed_at,delegated_to_user_id FROM records`).run();
    await env.DB.prepare('DROP TABLE records').run(); await env.DB.prepare('ALTER TABLE records_v20 RENAME TO records').run();
@@ -270,7 +276,7 @@ function reportDate(){return new Date().toISOString().slice(0,10)}
 function clientIp(req){return req.headers.get("CF-Connecting-IP")||req.headers.get("X-Forwarded-For")||"—"}
 function roleFilterRequired(u){return u.role==="responsible"?"r.status IN ('waiting_responsible','returned')":"r.status IN ('responsible_documented','responsible_withdrawn','returned')"}
 
-export default {async fetch(req,env){
+async function handleRequest(req,env){
  await ensureSchema(env); const url=new URL(req.url),p=url.pathname; const u=await user(req,env);
  if(p==="/api/me")return json({user:u?{id:u.id,name:u.name,username:u.username,role:u.role,permissions:permsOf(u)}:null});
  if(p==="/api/health"&&req.method==="GET"){try{const v=await env.DB.prepare("SELECT value FROM schema_meta WHERE key='version'").first();const r=await env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) active FROM users WHERE role='responsible'").first();const cols=await env.DB.prepare("PRAGMA table_info(records)").all();return json({ok:true,version:Number(v?.value||0),responsible_users:{total:Number(r?.c||0),active:Number(r?.active||0)},record_columns:(cols.results||[]).map(x=>x.name),user:u?{id:u.id,role:u.role,permissions:permsOf(u)}:null});}catch(e){return json({ok:false,error:String(e?.message||e)},500)}}
@@ -550,6 +556,14 @@ if(u.role==="requester"){esql+=" AND r.requester_id=?";ea.push(u.id)}if(status){
  if(p==="/api/password"&&req.method==="POST"){const b=await req.json();if(!b.current_password||!b.password)return json({error:"أدخل كلمة المرور الحالية والجديدة"},400);if(String(b.password).length<8)return json({error:"كلمة المرور الجديدة يجب ألا تقل عن 8 أحرف"},400);if(String(b.current_password)===String(b.password))return json({error:"اختر كلمة مرور جديدة مختلفة عن الحالية"},400);if(!(await verifyPassword(String(b.current_password),u.password_hash)))return json({error:"كلمة المرور الحالية غير صحيحة"},400);await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await passwordHash(String(b.password)),u.id).run();await env.DB.prepare("DELETE FROM sessions WHERE user_id=? AND token<>? ").bind(u.id,u.token).run();await log(env,null,u.id,"تغيير كلمة المرور","تغيير كلمة المرور من الحساب — تم إنهاء الجلسات الأخرى");return json({ok:true})}
  if(p==="/template.xlsx"||p==="/contract_upload_template.xlsx"){const asset=await env.ASSETS.fetch(new Request(new URL("/contract_upload_template.xlsx",url)));if(!asset.ok)return asset;const h=new Headers(asset.headers);h.set("content-disposition",'attachment; filename="contract_upload_template.xlsx"');h.set("content-type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");return new Response(asset.body,{status:asset.status,headers:h});}
  if(!p.startsWith("/api/"))return env.ASSETS.fetch(req);return json({error:"غير موجود"},404);
+}
+
+export default {async fetch(req,env){
+  try {
+    return await handleRequest(req,env);
+  } catch (e) {
+    console.error('Worker request failed', e);
+    const message=String(e?.message||e||'Unknown error');
+    return json({error:'حدث خطأ داخلي في الخادم',detail:message},500);
+  }
 }}
-
-
