@@ -232,10 +232,14 @@ textarea:focus-visible,[tabindex]:focus-visible{
     position:fixed;display:flex;bottom:12px;left:12px;right:12px;height:64px;z-index:60;
     background:linear-gradient(180deg,var(--ink-900),var(--ink-950));
     border:1px solid rgba(255,255,255,.08);border-radius:20px;
-    justify-content:space-around;align-items:center;
+    justify-content:space-around;align-items:center;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
     box-shadow:0 20px 45px rgba(4,10,22,.35);
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
+    mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
   }
-  .mobileBar button{background:transparent;color:#8ea0bc;display:grid;place-items:center;gap:3px;font-size:18px;min-width:52px;height:52px;border-radius:14px}
+  .mobileBar::-webkit-scrollbar{display:none}
+  .mobileBar button{background:transparent;color:#8ea0bc;display:grid;place-items:center;gap:3px;font-size:18px;min-width:56px;height:52px;border-radius:14px;flex:none}
   .mobileBar button span{font-size:8.5px;font-weight:700}
   .mobileBar button:hover,.mobileBar button.active{color:#fff;background:rgba(255,255,255,.07)}
   .mobileBar .navIcon{color:inherit}
@@ -410,9 +414,13 @@ select{
 .statIcon.green{background:var(--success-100);color:var(--success-700)}
 .statIcon.orange{background:var(--warn-100);color:var(--warn-700)}
 .statIcon.red{background:var(--danger-100);color:var(--danger-700)}
+.statIcon.purple{background:var(--violet-100);color:var(--violet-700)}
 .statCard small{display:block;color:var(--slate-500);font-size:10.5px;font-weight:600}
 .statCard strong{display:block;font-family:var(--font-mono);font-size:23px;margin-top:3px;color:var(--ink-900);letter-spacing:-.01em}
 .statCard em{font-style:normal;color:var(--slate-400);font-size:9.5px}
+.statsGrid.performanceKpis{grid-template-columns:repeat(5,1fr)}
+@media(max-width:1100px){.statsGrid.performanceKpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:650px){.statsGrid.performanceKpis{grid-template-columns:repeat(2,1fr)}}
 
 /* ============================================================
    6. نبض المسؤول وأداء المستخدمين
@@ -484,8 +492,8 @@ select{
 }
 .filterBar label{font-size:9.5px;color:var(--slate-500);font-weight:600}
 .filterBar label input,.filterBar label select{margin-top:5px}
-.filterBar>input{align-self:center}
-.filterBar button{align-self:center}
+.filterBar>input{align-self:end}
+.filterBar button{align-self:end}
 
 .responsibleWorkspace{
   background:linear-gradient(135deg,var(--ink-900),var(--ink-800));border-radius:var(--r-xl);
@@ -512,7 +520,7 @@ select{
 
 /* record row (v3-*) — the main transaction inbox row */
 .v3-case-row{
-  position:relative;display:grid;grid-template-columns:2.1fr .8fr .95fr 1.1fr 1.15fr 168px;
+  position:relative;display:grid;grid-template-columns:2.1fr .85fr 1fr 1.3fr 200px;
   gap:12px;align-items:center;padding:15px 17px;background:#fff;
   border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--sh-xs);cursor:pointer;
@@ -778,7 +786,7 @@ select{
    12. المستخدمون وسجل النشاط — Admin tables
    ============================================================ */
 .usersTable{font-size:11px}
-.usersHead,.userRow{display:grid;grid-template-columns:2fr 1fr 1fr .8fr .9fr 1.6fr;gap:11px;align-items:center;padding:13px 17px}
+.usersHead,.userRow{display:grid;grid-template-columns:1.9fr .85fr .8fr .8fr 2.55fr;gap:11px;align-items:center;padding:13px 17px}
 .usersHead{background:var(--slate-50);color:var(--slate-500);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
 .userRow{border-top:1px solid var(--line-soft);transition:background .12s var(--ease)}
 .userRow:hover{background:var(--accent-50)}
@@ -795,8 +803,8 @@ select{
 .userState.on{background:var(--success-100);color:var(--success-700)}
 .userState.off{background:var(--slate-100);color:var(--slate-500)}
 .permCount{color:var(--slate-500);font-family:var(--font-mono);font-size:10px}
-.rowActions{display:flex;gap:6px;flex-wrap:wrap}
-.rowActions button{flex:1;padding:8px 10px;font-size:9.5px;min-width:max-content;height:auto}
+.rowActions{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-start}
+.rowActions button{flex:0 1 auto;padding:0 11px;font-size:10px;height:34px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 
 .auditFilters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:9px;margin-bottom:14px}
@@ -922,7 +930,7 @@ select{
    16. الاستجابة للشاشات — Responsive
    ============================================================ */
 @media(max-width:1200px){
-  .v3-case-row{grid-template-columns:1.8fr .7fr .85fr 1fr 1.05fr 150px}
+  .v3-case-row{grid-template-columns:1.8fr .75fr .95fr 1.15fr 180px}
 }
 @media(max-width:1100px){
   .managerGrid{grid-template-columns:repeat(2,1fr)}
@@ -943,7 +951,8 @@ select{
   .v3-case-extra{position:static;grid-column:1/-1}
   .usersHead,.auditHead{display:none}
   .userRow{grid-template-columns:1fr;gap:8px;padding:15px}
-  .rowActions{width:100%}
+  .rowActions{width:100%;flex-wrap:wrap}
+  .rowActions button{flex:1 1 auto}
   .auditRow{grid-template-columns:1fr 1fr;gap:7px}
   .auditRow p{grid-column:1/-1}
   .delegationCreate{grid-template-columns:1fr 1fr}
@@ -1183,15 +1192,22 @@ select{
 
 /* V20.2 — final UX direction */
 .commandCenterClean{display:grid;gap:18px}
-.commandWelcome{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px 26px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh-sm)}
+.commandWelcome{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px 26px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh-sm)}
+.commandWelcome:before{content:"";position:absolute;top:-60%;left:-6%;width:260px;height:260px;background:radial-gradient(circle,var(--accent-50),transparent 70%);border-radius:50%;pointer-events:none}
+.commandWelcome>div:first-child{position:relative;z-index:1}
+.commandActions{position:relative;z-index:1}
 .commandWelcome h2{font-size:24px;margin:5px 0 2px;color:var(--ink-900);letter-spacing:-.02em}
 .commandWelcome p{margin:0;color:var(--slate-500);font-size:11px}
 .commandActions{display:flex;gap:8px;flex-wrap:wrap}
+.commandWelcome .ccPrimary{background:var(--accent-600);color:#fff;box-shadow:0 10px 22px rgba(23,89,159,.24)}
+.commandWelcome .ccPrimary:hover{background:var(--accent-500);box-shadow:0 12px 26px rgba(23,89,159,.3)}
+.commandWelcome .ccSecondary{background:var(--slate-50);border:1px solid var(--line);color:var(--ink-700)}
+.commandWelcome .ccSecondary:hover{background:var(--slate-100)}
 .commandSignals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .commandSignal{display:flex;align-items:center;gap:12px;text-align:right;padding:16px 17px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh-xs);transition:.16s var(--ease)}
 .commandSignal:hover{transform:translateY(-1px);border-color:var(--accent-300);box-shadow:var(--sh-md)}
 .commandSignal>div{display:flex;flex-direction:column;min-width:0}.commandSignal small{font-size:9.5px;color:var(--slate-500)}.commandSignal b{font:700 23px var(--font-mono);color:var(--ink-900);margin-top:2px}
-.signalIcon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:900;flex:none}.signalIcon.blue{background:var(--accent-50);color:var(--accent-700)}.signalIcon.amber{background:var(--warn-50);color:var(--warn-700)}.signalIcon.red{background:var(--danger-50);color:var(--danger-700)}.signalIcon.green{background:var(--success-50);color:var(--success-700)}
+.signalIcon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:900;font-size:17px;flex:none}.signalIcon.blue{background:var(--accent-50);color:var(--accent-700)}.signalIcon.amber{background:var(--warn-50);color:var(--warn-700)}.signalIcon.red{background:var(--danger-50);color:var(--danger-700)}.signalIcon.green{background:var(--success-50);color:var(--success-700)}
 .commandColumns{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.8fr);gap:16px}
 .commandPanel{background:#fff;border:1px solid var(--line);border-radius:21px;box-shadow:var(--sh-xs);overflow:hidden}
 .commandPanelHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:19px 20px 14px;border-bottom:1px solid var(--line-soft)}
@@ -1332,427 +1348,3 @@ select{
 }
 .appSelectButton{touch-action:manipulation}
 .appSelectMenu button{touch-action:manipulation}
-
-/* ============================================================
-   V21 — VISUAL REFINEMENT / ENTERPRISE POLISH
-   ------------------------------------------------------------
-   Visual-only layer. No workflow, data, permissions or JS logic
-   is changed here. Goal: calmer hierarchy, stronger readability,
-   premium enterprise feel, and a genuinely comfortable mobile UI.
-   ============================================================ */
-:root{
-  --canvas:#f6f8fc;
-  --canvas-deep:#eef3f9;
-  --surface:#ffffff;
-  --line:#dfe6ef;
-  --line-soft:#edf1f6;
-  --ink-950:#091625;
-  --ink-900:#0d1d31;
-  --ink-850:#132943;
-  --ink-800:#183653;
-  --ink-700:#254664;
-  --slate-600:#526174;
-  --slate-500:#718096;
-  --slate-400:#94a1b2;
-  --accent-700:#12447d;
-  --accent-600:#1762aa;
-  --accent-500:#2879c7;
-  --accent-400:#5598dc;
-  --accent-300:#8bbbe5;
-  --accent-200:#c9dff2;
-  --accent-100:#e6f0fb;
-  --accent-50:#f4f8fd;
-  --r-sm:9px;
-  --r-md:12px;
-  --r-lg:16px;
-  --r-xl:20px;
-  --r-2xl:24px;
-  --sh-xs:0 1px 2px rgba(18,35,57,.035);
-  --sh-sm:0 5px 18px rgba(18,35,57,.055);
-  --sh-md:0 14px 34px rgba(18,35,57,.085);
-  --sh-lg:0 24px 60px rgba(8,22,39,.13);
-}
-
-html{background:var(--canvas)}
-body{background:linear-gradient(180deg,#f8faff 0,#f5f7fb 48%,#f1f5fa 100%);font-size:14px}
-body:before{
-  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
-  background:radial-gradient(900px 380px at 50% -120px,rgba(47,119,195,.07),transparent 70%);
-}
-
-/* ---------- App shell ---------- */
-.appShell{background:transparent}
-.main{padding-inline:clamp(14px,3vw,44px);padding-bottom:80px}
-
-/* ---------- Topbar: quieter, more premium ---------- */
-.topbar{
-  min-height:68px;
-  margin-inline:clamp(-14px,-3vw,-44px);
-  padding-inline:clamp(14px,3vw,44px);
-  background:rgba(9,22,37,.97);
-  border-bottom:1px solid rgba(255,255,255,.065);
-  box-shadow:0 8px 26px rgba(7,18,32,.13);
-  backdrop-filter:blur(16px);
-}
-.brandMark{
-  width:40px;height:40px;border-radius:12px;
-  background:linear-gradient(145deg,#2d83d2,#123b6d);
-  box-shadow:0 8px 20px rgba(22,94,164,.28),inset 0 1px 0 rgba(255,255,255,.22);
-}
-.topBrand{gap:10px}
-.topBrand strong{font-size:13.5px;letter-spacing:-.01em}
-.topBrand small{opacity:.82}
-.topNav{gap:4px}
-.topNav button{height:38px;padding-inline:12px;border-radius:10px;color:#aebdd0}
-.topNav button.active{background:rgba(82,153,221,.15);box-shadow:inset 0 0 0 1px rgba(105,173,232,.08)}
-.topNav button.active:after{
-  content:"";position:absolute;bottom:3px;left:22%;right:22%;height:2px;border-radius:99px;background:#6aa8df;opacity:.9;
-}
-.connection{padding:7px 11px;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.07)}
-.avatarTop{width:36px;height:36px;border-radius:11px;background:linear-gradient(145deg,#2a79c3,#1a3553)}
-.logoutTop{height:36px;border-radius:9px}
-
-/* ---------- Page heading ---------- */
-.pageHeader{padding:28px 2px 18px;align-items:center}
-.pageHeader h1{font-size:26px;letter-spacing:-.035em;margin-top:5px}
-.pageHeader p{font-size:11.5px;color:#7c899a}
-.eyebrow{font-size:9.5px;letter-spacing:.13em;color:var(--accent-600)}
-.workspacePill{padding:7px 12px;background:#edf4fb;border:1px solid #dbe8f6;color:var(--accent-700);font-size:10px}
-
-/* ---------- Universal surface language ---------- */
-.section{margin-top:30px}
-.sectionHead{margin-bottom:13px}
-.sectionHead h2{font-size:17px;letter-spacing:-.02em}
-.sectionHead p{font-size:10.5px}
-.sectionHead .headActions{gap:7px}
-
-/* ---------- Buttons ---------- */
-.primary,.soft,.ghost,.danger,.heroBtn,.heroGhost,.openBtn{
-  height:40px;border-radius:10px;padding-inline:15px;font-size:11px;font-weight:800;
-  box-shadow:none;
-}
-.primary{background:var(--accent-600);box-shadow:0 7px 16px rgba(23,98,170,.16)}
-.primary:hover{background:var(--accent-500);box-shadow:0 9px 20px rgba(23,98,170,.2)}
-.soft{background:#f1f6fc;border-color:#dce8f5}
-.ghost{background:#fff;border-color:var(--line);color:#536174}
-.danger{box-shadow:0 7px 16px rgba(194,56,69,.12)}
-.big{height:46px}
-
-/* ---------- Inputs: one clean family ---------- */
-input,select,textarea,.appSelectButton{
-  border-color:#dce4ee;border-radius:10px;background:#fff;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
-}
-input,select,.appSelectButton{height:40px}
-input:focus,select:focus,textarea:focus,.appSelectButton[aria-expanded="true"]{
-  border-color:#67a2d9;box-shadow:0 0 0 3px #e7f1fb;
-}
-label{font-size:10px;color:#68778a}
-.appSelectMenu{border-color:#dce4ee;border-radius:12px;box-shadow:0 16px 36px rgba(18,35,57,.12)}
-.appSelectMenu button{font-size:11px;padding:9px;border-radius:8px}
-
-/* ---------- Dashboard hero: less "console", more executive ---------- */
-.commandHero{
-  min-height:214px;padding:30px 32px;border-radius:22px;
-  background:
-    radial-gradient(420px 240px at 86% 0,rgba(77,153,222,.22),transparent 68%),
-    linear-gradient(135deg,#091827 0%,#102943 100%);
-  box-shadow:0 18px 42px rgba(7,21,36,.16);
-}
-.commandHero:before{opacity:.55;animation-duration:22s}
-.commandHero:after{opacity:.5}
-.heroCopy h2{font-size:27px;letter-spacing:-.035em;margin:7px 0 7px}
-.heroCopy p{font-size:12px;color:#bdcad9;line-height:1.85;max-width:560px}
-.heroActions{margin-top:19px}
-.heroBtn,.heroGhost{height:39px}
-.heroMetric{
-  width:190px;min-width:190px;padding:19px;border-radius:17px;
-  background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
-}
-.heroMetric strong{font-size:38px}
-
-/* ---------- Stats: number-first, less cardy ---------- */
-.statsGrid{gap:11px;margin:14px 0}
-.statCard{
-  min-height:94px;padding:15px;border-radius:15px;gap:12px;
-  border-color:#e0e7ef;box-shadow:var(--sh-xs);
-}
-.statCard:hover{transform:translateY(-1px);box-shadow:var(--sh-sm)}
-.statIcon{width:38px;height:38px;border-radius:11px;font-size:15px}
-.statCard small{font-size:10px}
-.statCard strong{font-size:22px;margin-top:1px}
-.statCard em{font-size:9px}
-
-/* ---------- Operational cards ---------- */
-.managerCard,.activityTable,.usersTable,.auditTable,.responsiblePulse,.statsSelectionBar,.performanceCompare,.performanceKpis .statCard{
-  border-color:#e0e7ef!important;box-shadow:var(--sh-xs)!important;
-}
-.managerCard{border-radius:16px;padding:16px}
-.managerCard:hover{transform:translateY(-2px);box-shadow:var(--sh-sm)!important}
-.managerNumbers div{background:#f7f9fc;border-color:#edf1f5}
-.managerNumbers b{font-size:16px}
-.activityTable,.usersTable,.auditTable{border-radius:16px;overflow:hidden}
-.activityHeader{background:#f7f9fc;padding:11px 17px}
-.activityRow{padding:12px 17px}
-.activityRow:hover{background:#f7faff}
-
-/* ---------- Transaction list: stronger scan line ---------- */
-.filterBar{
-  background:#fff;border-color:#e0e7ef;border-radius:15px;padding:11px;box-shadow:var(--sh-xs);
-}
-.v3-case-row{
-  border-color:#e0e7ef;border-radius:15px;background:#fff;
-  box-shadow:var(--sh-xs);transition:transform .15s var(--ease),box-shadow .15s var(--ease),border-color .15s var(--ease);
-}
-.v3-case-row:hover{transform:translateY(-1px);box-shadow:var(--sh-sm);border-color:#cddceb}
-.v3-case-number{border-radius:10px;background:#eef5fc;color:var(--accent-700)}
-.v3-status{padding:5px 9px;font-size:9px}
-.v3-action{height:36px;border-radius:9px;font-size:10px}
-.v3-open{width:36px;height:36px;border-radius:9px}
-
-/* ---------- Dark responsible workspace: keep as a focused tool, not whole app ---------- */
-.responsibleWorkspace,.quickActionStrip{border-radius:18px;box-shadow:0 16px 34px rgba(8,22,39,.13)}
-.quickActionStrip{padding:14px 16px}
-
-/* ---------- Detail sheet: premium document surface ---------- */
-.recordModal{background:rgba(5,15,28,.48);backdrop-filter:blur(8px)}
-.recordSheet{background:#f6f8fb;padding:20px 24px 56px;box-shadow:-20px 0 70px rgba(0,0,0,.18)}
-.v4-identity{border-radius:18px;box-shadow:var(--sh-xs)}
-.v4-panel{border-radius:15px;box-shadow:var(--sh-xs)}
-.v4-case-mark{border-radius:12px}
-.recordInlineDetails{border-color:#d9e5f1;background:#f7faff;box-shadow:0 12px 30px rgba(10,35,70,.07)}
-.recordInlineDetails .v4-identity,.recordInlineDetails .v4-panel{box-shadow:var(--sh-xs)}
-
-/* ---------- Empty / loading states ---------- */
-.emptyState,.errorState{min-height:150px;border-radius:16px;background:rgba(255,255,255,.78)}
-.loading{padding:58px 20px}
-
-/* ---------- Tables / dense admin pages ---------- */
-.auditFilters{border-radius:15px!important;border-color:#e0e7ef!important;box-shadow:var(--sh-xs)!important}
-.auditRow,.usersRow{border-color:#edf1f5!important}
-
-/* ---------- Footer ---------- */
-.appFooter{padding:26px 0 8px;font-size:9.5px}
-.appFooter b{background:#eef2f7}
-
-/* ============================================================
-   MOBILE — designed as a real app, not a squeezed desktop
-   ============================================================ */
-@media(max-width:900px){
-  body{font-size:13.5px;overflow:hidden}
-  .main{padding-inline:12px!important;padding-bottom:92px!important}
-  .topbar{
-    min-height:58px!important;margin-inline:-12px!important;padding:8px 12px!important;
-    box-shadow:0 5px 18px rgba(7,18,32,.11);border-bottom-color:rgba(255,255,255,.08)
-  }
-  .brandMark{width:36px;height:36px;border-radius:10px;font-size:11px}
-  .topActions{gap:5px}
-  .avatarTop{width:34px!important;height:34px!important;border-radius:10px}
-  .logoutTop{height:34px!important;border-radius:9px!important;padding-inline:10px!important}
-
-  .pageHeader{padding:18px 2px 12px!important;align-items:flex-start}
-  .pageHeader h1{font-size:21px!important;letter-spacing:-.035em;margin:4px 0 0}
-  .eyebrow{font-size:8.5px}
-
-  .section{margin-top:23px}
-  .sectionHead{margin-bottom:11px;gap:9px}
-  .sectionHead h2{font-size:15.5px}
-  .sectionHead p{font-size:9.5px}
-  .headActions{width:100%;justify-content:stretch}
-  .headActions>*{flex:1;min-width:0}
-
-  /* Hero becomes compact and intentional */
-  .commandHero{
-    min-height:0;padding:22px 18px;border-radius:19px;display:block;
-    background:
-      radial-gradient(260px 160px at 100% 0,rgba(77,153,222,.20),transparent 70%),
-      linear-gradient(145deg,#091827,#102943);
-  }
-  .commandHero:before{width:330px;height:330px;left:auto;right:-220px;bottom:-220px;opacity:.35}
-  .commandHero:after{display:none}
-  .heroCopy{max-width:none}
-  .heroCopy>span{font-size:8.5px}
-  .heroCopy h2{font-size:22px;line-height:1.35;margin:5px 0 7px}
-  .heroCopy p{font-size:10.5px;line-height:1.8}
-  .heroActions{margin-top:15px;display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  .heroActions>*{width:100%;min-width:0}
-  .heroBtn,.heroGhost{height:38px;font-size:10px}
-  .heroMetric{width:100%;min-width:0;margin-top:14px;padding:13px 15px;display:grid;grid-template-columns:auto 1fr;gap:0 12px;align-items:center;text-align:right;border-radius:14px}
-  .heroMetric small{grid-column:1;grid-row:1;font-size:9px}
-  .heroMetric strong{grid-column:2;grid-row:1;font-size:27px;text-align:left;margin:0}
-  .heroMetric div{grid-column:1/-1;grid-row:2;margin-top:7px}
-  .heroMetric span{grid-column:1/-1;grid-row:3;margin-top:5px;font-size:8.5px}
-
-  /* Stats become a clean two-column dashboard */
-  .statsGrid{grid-template-columns:1fr 1fr!important;gap:8px;margin:10px 0}
-  .statCard{min-height:86px;padding:12px;border-radius:14px;gap:9px;align-items:flex-start}
-  .statIcon{width:33px;height:33px;border-radius:10px;font-size:13px}
-  .statCard small{font-size:8.8px;line-height:1.4}
-  .statCard strong{font-size:19px;margin-top:2px}
-  .statCard em{font-size:8px;line-height:1.35}
-
-  /* Panels breathe on mobile */
-  .managerGrid{grid-template-columns:1fr!important;gap:8px}
-  .managerCard{padding:14px;border-radius:14px}
-  .managerNumbers{gap:6px;margin:13px 0 11px}
-  .managerNumbers div{padding:9px;border-radius:10px}
-  .managerNumbers small{font-size:8px}
-  .managerNumbers b{font-size:15px}
-
-  .pulseList{gap:7px}
-  .pulseList div{padding:11px;border-radius:11px}
-  .pulseMain{padding:14px;border-radius:14px}
-  .pulseMain strong{font-size:32px}
-
-  /* Filter toolbar */
-  .filterBar{padding:9px!important;border-radius:13px!important;gap:7px!important}
-  .filterBar label{font-size:8.8px}
-  .filterBar input,.filterBar .appSelectButton,.filterBar button{height:39px!important}
-
-  /* Transaction cards are the mobile primary pattern */
-  .v3-case-row{gap:9px!important;padding:12px!important;border-radius:14px!important}
-  .v3-case-identity{gap:9px}
-  .v3-case-number{width:38px!important;height:38px!important;border-radius:10px!important}
-  .v3-case-identity strong{font-size:11.5px}
-  .v3-case-identity small{font-size:8.5px}
-  .v3-label{font-size:8px;margin-bottom:2px}
-  .v3-case-type b,.v3-case-responsible b,.v3-case-assignee b{font-size:10px}
-  .v3-status{font-size:8.5px;padding:5px 8px}
-  .v3-case-action{gap:6px!important}
-  .v3-action{height:36px!important;border-radius:9px!important;font-size:9.5px!important}
-  .v3-direct-actions{gap:6px!important}
-  .v3-case-extra{position:static!important;margin-top:-2px}
-
-  /* Mobile bottom nav: floating, thumb-friendly, premium */
-  .mobileBar{
-    left:10px!important;right:10px!important;bottom:calc(9px + env(safe-area-inset-bottom))!important;
-    height:64px!important;padding:6px!important;border:1px solid rgba(255,255,255,.62)!important;
-    border-radius:18px!important;background:rgba(250,252,255,.94)!important;
-    box-shadow:0 16px 38px rgba(12,30,52,.17),0 2px 8px rgba(12,30,52,.06)!important;
-    backdrop-filter:blur(18px)!important;
-    grid-auto-columns:minmax(52px,1fr)!important;gap:3px!important;
-  }
-  .mobileBar button{height:50px!important;min-width:52px!important;border-radius:13px!important;color:#7a8798!important;font-size:8px!important}
-  .mobileBar button .navIcon{width:20px;height:20px}
-  .mobileBar button svg{width:18px!important;height:18px!important}
-  .mobileBar button.active{background:var(--ink-900)!important;color:#fff!important;box-shadow:0 7px 16px rgba(9,24,40,.20)!important}
-  .mobileBar button.active .navIcon{color:#8fc3ed!important}
-
-  /* Inline record detail */
-  .recordInlineDetails{margin:0 0 12px!important;border-radius:0 0 16px 16px!important}
-  .recordInlineDetails .recordSheet{padding:12px 10px 15px!important}
-  .recordInlineDetails .v4-identity{border-radius:14px!important;padding:12px!important}
-  .recordInlineDetails .v4-panel{border-radius:13px!important;padding:12px!important}
-  .recordInlineDetails .v4-overview-grid>div{padding:10px;border-radius:10px}
-
-  /* Tables turn into horizontally scrollable islands instead of breaking */
-  .activityTable,.usersTable,.auditTable{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .activityHeader,.activityRow{min-width:620px}
-
-  .appFooter{padding:22px 0 4px;font-size:8px}
-}
-
-@media(max-width:520px){
-  .main{padding-inline:10px!important}
-  .topbar{margin-inline:-10px!important;padding-inline:10px!important}
-  .pageHeader{padding-inline:1px!important}
-  .statsGrid{gap:7px}
-  .statCard{min-height:82px;padding:10px}
-  .statCard strong{font-size:18px}
-  .statIcon{width:31px;height:31px}
-  .heroActions{grid-template-columns:1fr}
-  .heroMetric{grid-template-columns:auto 1fr}
-  .sectionHead .headActions{flex-wrap:wrap}
-  .sectionHead .headActions>*{flex:1 1 calc(50% - 4px)}
-  .mobileBar{left:7px!important;right:7px!important;bottom:calc(7px + env(safe-area-inset-bottom))!important;height:61px!important;border-radius:17px!important}
-  .mobileBar button{min-width:48px!important;height:48px!important}
-}
-
-@media(min-width:901px) and (max-width:1180px){
-  .topBrand small{display:none}
-  .topNav button{padding-inline:9px}
-  .topNav button span{font-size:10.5px}
-  .connection{display:none}
-  .commandHero{padding-inline:26px}
-  .statsGrid{grid-template-columns:repeat(2,1fr)!important}
-}
-
-@media(prefers-reduced-motion:reduce){
-  .commandHero:before{animation:none}
-}
-
-/* ============================================================
-   V22 — VISUAL REBUILD / ENTERPRISE MOBILE-FIRST
-   ------------------------------------------------------------
-   A real visual system pass over V21. No business logic changes.
-   ============================================================ */
-:root{
-  --canvas:#f5f7fb;
-  --canvas-deep:#eef2f7;
-  --surface:#fff;
-  --line:#e4e9f1;
-  --line-soft:#edf1f5;
-  --ink-950:#081525;
-  --ink-900:#0d1d31;
-  --ink-800:#18324f;
-  --ink-700:#294767;
-  --slate-600:#59697e;
-  --slate-500:#748398;
-  --slate-400:#95a1b2;
-  --accent-700:#124c8b;
-  --accent-600:#1768b2;
-  --accent-500:#287bc7;
-  --accent-400:#5a9fe0;
-  --accent-100:#eaf3fc;
-  --accent-50:#f5f9fe;
-  --sh-xs:0 1px 2px rgba(13,29,49,.035);
-  --sh-sm:0 7px 22px rgba(13,29,49,.055);
-  --sh-md:0 14px 36px rgba(13,29,49,.075);
-  --sh-lg:0 24px 65px rgba(7,21,37,.15);
-}
-body{font-size:14px;background:var(--canvas)}
-.main{padding-left:clamp(18px,3.5vw,48px);padding-right:clamp(18px,3.5vw,48px)}
-.topbar{min-height:68px;margin-left:clamp(-48px,-3.5vw,-18px);margin-right:clamp(-48px,-3.5vw,-18px);padding-left:clamp(18px,3.5vw,48px);padding-right:clamp(18px,3.5vw,48px);background:#0b1a2d;box-shadow:0 1px 0 rgba(255,255,255,.045) inset,0 7px 24px rgba(6,18,32,.16)}
-.brandMark{width:40px;height:40px;border-radius:12px;box-shadow:0 8px 18px rgba(35,111,194,.22),inset 0 1px 0 rgba(255,255,255,.18)}
-.topNav{gap:5px}.topNav button{height:38px;border-radius:10px;padding:0 12px}.topNav button.active{background:rgba(255,255,255,.095);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
-.pageHeader{padding-top:30px;padding-bottom:20px}.pageHeader h1{font-size:28px;letter-spacing:-.04em}.pageHeader p{font-size:12px;color:#718198}
-.section{margin-top:27px}.sectionHead{margin-bottom:13px}.sectionHead h2{font-size:18px;letter-spacing:-.025em}.sectionHead p{font-size:11px}
-.sectionHead .eyebrow{font-size:9px;letter-spacing:.12em}
-.statCard{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-xs);min-height:98px;padding:16px;position:relative;overflow:hidden}
-.statCard:after{content:"";position:absolute;inset:auto 0 0 0;height:2px;background:var(--accent-500);opacity:.08}.statCard:hover{box-shadow:var(--sh-sm);transform:translateY(-2px)}
-.statIcon{width:36px;height:36px;border-radius:10px}.statCard small{font-size:10px}.statCard strong{font-size:24px;letter-spacing:-.02em}
-.commandHero{border-radius:22px;box-shadow:var(--sh-md);background:linear-gradient(135deg,#0a1a2c 0%,#102b47 100%);border:1px solid rgba(255,255,255,.055)}
-.commandHero:after{opacity:.22}.heroCopy h2{font-size:28px;letter-spacing:-.045em}.heroCopy p{color:#c4cfdd}.heroMetric{border-radius:16px;background:rgba(255,255,255,.065);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
-.filterBar{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--sh-xs);padding:10px}.filterBar input,.filterBar .appSelectButton{background:#fbfcfe;border-color:#e5eaf1}
-.v3-case-row{border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-xs);background:#fff}.v3-case-row:hover{border-color:#cbd9e8;box-shadow:var(--sh-sm)}
-.v3-case-number{background:#edf5fd;color:var(--accent-700);border:1px solid #e1edf9}
-.v3-action{border-radius:10px}.v3-open{border-radius:10px}
-.managerCard,.activityTable,.usersTable,.auditTable,.responsiblePulse,.statsSelectionBar,.performanceCompare,.performanceKpis .statCard{border-color:var(--line)!important;box-shadow:var(--sh-xs)!important}
-.managerCard{border-radius:16px}.activityTable,.usersTable,.auditTable{border-radius:16px}
-.recordModal{background:rgba(7,18,31,.52);backdrop-filter:blur(10px)}.recordSheet{background:#f5f7fa}.v4-identity,.v4-panel{border-color:var(--line);box-shadow:var(--sh-xs)}
-.modalShade{background:rgba(7,18,31,.52);backdrop-filter:blur(10px)}
-.userModal{width:min(880px,94vw);padding:0;overflow:hidden;border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh-lg);background:#f7f9fc}
-.userModal:before{content:"إدارة الوصول";display:block;padding:20px 24px 14px;background:#fff;border-bottom:1px solid var(--line);font-size:11px;font-family:var(--font-mono);font-weight:700;letter-spacing:.08em;color:var(--accent-600)}
-.userModal h2{padding:16px 24px 0;margin:0;font-size:21px}.userModal>.formGrid{margin:14px 24px 0;background:#fff;border-radius:15px;padding:16px}
-.permGrid{padding:0 24px;margin:14px 0;gap:8px}.permCheck{min-height:46px;border-radius:11px}.userFormActions{bottom:0;padding:14px 24px 20px;background:rgba(247,249,252,.96);border-top:1px solid var(--line);margin-top:14px}.userFormActions .primary{height:44px;border-radius:12px}
-.userRow{padding:15px 18px}.usersHead{padding:12px 18px}.rowActions button{border-radius:9px}
-.delegationCreate{border-radius:16px;border-color:var(--line);box-shadow:var(--sh-xs)}.delegationTable{border-color:var(--line);box-shadow:var(--sh-xs)}
-.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--slate-500);font-size:11px}.loadingSpinner,.btnSpinner{width:17px;height:17px;border:2px solid #dbe5ef;border-top-color:var(--accent-500);border-radius:50%;animation:v22spin .7s linear infinite}.btnSpinner{width:14px;height:14px;border-color:rgba(255,255,255,.35);border-top-color:#fff;display:inline-block;vertical-align:-2px;margin-left:6px}@keyframes v22spin{to{transform:rotate(360deg)}}.primary.isLoading{pointer-events:none;opacity:.85}
-.delegationLoading,.delegationError{min-height:96px;display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;color:var(--slate-500);font-size:10px;padding:18px}.delegationError{flex-direction:column}.delegationError b{color:var(--danger-700)}
-.emptyRow{padding:35px;text-align:center;color:var(--slate-400);font-size:11px}
-
-@media(max-width:900px){
-  body{font-size:13px}.main{padding-left:12px!important;padding-right:12px!important;padding-bottom:96px!important}
-  .topbar{margin-left:-12px!important;margin-right:-12px!important;min-height:58px!important;padding:8px 12px!important}
-  .pageHeader{padding:19px 2px 12px!important}.pageHeader h1{font-size:22px!important}.section{margin-top:22px}.sectionHead h2{font-size:16px}
-  .commandHero{border-radius:18px;padding:20px 16px}.heroCopy h2{font-size:23px}.heroCopy p{font-size:10.5px}.heroMetric{border-radius:13px}
-  .statsGrid{gap:8px}.statCard{min-height:88px;border-radius:14px;padding:12px}.statCard strong{font-size:20px}.statCard small{font-size:8.7px}
-  .filterBar{border-radius:13px}.v3-case-row{border-radius:14px}
-  .userModal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:18px}.userModal:before{padding:16px 16px 12px}.userModal h2{padding:14px 16px 0;font-size:18px}.userModal>.formGrid{margin:12px 12px 0;padding:11px}.permGrid{padding:0 12px;margin:11px 0;grid-template-columns:1fr!important}.userFormActions{padding:11px 12px calc(12px + env(safe-area-inset-bottom));margin-top:10px}.userFormActions .primary{height:45px}
-  .usersTable{overflow:visible;border-radius:14px}.usersHead{display:none}.userRow{display:grid;grid-template-columns:1fr auto;gap:9px;padding:13px;border-top:1px solid var(--line-soft);align-items:start}.userRow>span{font-size:9px}.userIdentity{grid-column:1/-1}.rowActions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}.rowActions button{min-width:0;height:37px}.rowActions button:first-child{grid-column:1/-1}
-  .delegationCreate{grid-template-columns:1fr!important;padding:12px;gap:8px;border-radius:14px}.delegationCreate .wide{grid-column:auto}.delegationRow{grid-template-columns:1fr auto;gap:7px;padding:12px}.delegationRow>small{grid-column:1/-1}.delegationRow>.danger{grid-column:2;grid-row:1}
-  .mobileBar{left:9px!important;right:9px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important}
-}
-@media(max-width:520px){
-  .main{padding-left:10px!important;padding-right:10px!important}.topbar{margin-left:-10px!important;margin-right:-10px!important}.pageHeader h1{font-size:20px!important}.statsGrid{grid-template-columns:1fr 1fr!important}.statCard{min-height:82px;padding:10px}.statCard strong{font-size:18px}.statIcon{width:31px;height:31px}.commandHero{padding:18px 14px}.heroCopy h2{font-size:21px}.heroActions{grid-template-columns:1fr}.mobileBar{left:7px!important;right:7px!important}
-}

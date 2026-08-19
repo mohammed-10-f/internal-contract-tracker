@@ -692,28 +692,12 @@ function downloadRows(rows,name){
 async function users(){
   if(!can("manage_users")){toast("لا تملك صلاحية إدارة المستخدمين","err");return}
   VIEW="users";navActive("users");title("المستخدمون والتفويض","إدارة الوصول والتفويض المركزي للمعاملات الحالية والمستقبلية.");
-  const v=document.querySelector("#view");
-  v.innerHTML=`<div class="loading"><div class="loadingSpinner"></div><span>جاري تحميل المستخدمين…</span></div>`;
+  const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري تحميل المستخدمين…</div>`;
   try{
-    // Load the primary screen first. Delegations are secondary data and must never
-    // be allowed to hold the users screen hostage if their sync is slow.
-    const ud=await api("/api/users");
+    const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
-    v.innerHTML=`<section class="section"><div class="sectionHead"><div><span class="eyebrow">ACCESS CONTROL</span><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")||`<div class="emptyRow">لا يوجد مستخدمون.</div>`}</div></section>
-    <section class="section"><div class="sectionHead"><div><span class="eyebrow">DELEGATION</span><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div id="delegationTable" class="delegationTable"><div class="delegationLoading"><div class="loadingSpinner"></div><span>جاري تحميل التفويض…</span></div></div></section>`;
-    enhanceSelects(v);
-
-    // Secondary load: render independently so a slow delegation sync never
-    // leaves the entire users page looking frozen.
-    try{
-      const dd=await api("/api/delegations");
-      const box=document.querySelector("#delegationTable");
-      if(!box)return;
-      box.innerHTML=(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط");
-    }catch(e){
-      const box=document.querySelector("#delegationTable");
-      if(box)box.innerHTML=`<div class="delegationError"><b>تعذر تحميل التفويض</b><span>يمكنك الاستمرار في إدارة المستخدمين والصلاحيات.</span><button class="soft" onclick="users()">إعادة المحاولة</button></div>`;
-    }
+    v.innerHTML=`<section class="section"><div class="sectionHead"><div><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
+    <section class="section"><div class="sectionHead"><div><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
   }catch(e){v.innerHTML=errorState(e.message);}
 }
 function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)return;const boxes=[...group.querySelectorAll("input[name=perm]")];const all=boxes.length&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
@@ -727,29 +711,10 @@ function userForm(x={role:"requester",permissions:roleDefaults.requester}){
 function applySuggestedPerms(){ const modal=document.querySelector(".userModal"); const role=modal?.querySelector("#fr")?.value||"requester"; const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); }
 async function saveUser(id){
   const modal=document.querySelector(".userModal"); if(!modal)return;
-  if(modal.dataset.saving==="1")return;
   const username=modal.querySelector("#fu")?.value.trim()||"", name=modal.querySelector("#fn")?.value.trim()||"", password=modal.querySelector("#fp")?.value||"", role=modal.querySelector("#fr")?.value||"requester";
   const permissions=[...modal.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value);
   if(!username||!name)return toast("أكمل اسم المستخدم والاسم","err");
-  const btn=modal.querySelector(".userFormActions .primary");
-  modal.dataset.saving="1";
-  if(btn){btn.disabled=true;btn.classList.add("isLoading");btn.dataset.originalText=btn.textContent;btn.innerHTML=`<span class="btnSpinner"></span> جاري حفظ التغييرات…`;}
-  try{
-    const b={name,role,permissions};
-    if(!id)b.username=username;
-    if(password)b.password=password;
-    if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});
-    else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});
-    modal.remove();
-    toast("تم حفظ المستخدم بنجاح");
-    // Await the refresh so errors cannot become unhandled promises. The users
-    // screen itself no longer waits for delegation data, so it cannot appear stuck.
-    await users();
-  }catch(e){
-    modal.dataset.saving="0";
-    if(btn){btn.disabled=false;btn.classList.remove("isLoading");btn.textContent=btn.dataset.originalText||"حفظ التغييرات";}
-    toast(e.message,"err");
-  }
+  try{const b={name,role,permissions};if(!id)b.username=username;if(password)b.password=password;if(!id)await api("/api/users",{method:"POST",body:JSON.stringify({...b,username,password:password||""})});else await api(`/api/users/${id}`,{method:"POST",body:JSON.stringify(b)});modal.remove();toast("تم حفظ المستخدم");users();}catch(e){toast(e.message,"err");}
 }
 async function clearTestData(){
   const ok=prompt("هذا الإجراء يحذف المعاملات والمستخدمين التجريبيين والجلسات والتفويضات. اكتب RESET للتأكيد:");
