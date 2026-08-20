@@ -521,6 +521,38 @@ return json({record:withMeta(r),events:ev.results,stages})}
  }
  if(p==="/api/stats-users"&&req.method==="GET"){if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);if(u.role==="responsible")return json({users:[{id:u.id,name:u.name,username:u.username,role:u.role,active:u.active}]});const rows=await env.DB.prepare("SELECT id,username,name,role,active FROM users WHERE active=1 AND role='responsible' ORDER BY name").all();return json({users:rows.results});}
  if(p==="/api/users"&&req.method==="GET"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const rows=await env.DB.prepare("SELECT id,username,name,role,active,permissions,created_at FROM users ORDER BY id DESC").all();return json({users:rows.results.map(x=>({...x,permissions:permsOf(x)}))})}
+ if(p==="/api/users/bulk"&&req.method==="POST"){
+   if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);
+   const b=await req.json().catch(()=>({})),rows=Array.isArray(b.rows)?b.rows:[];
+   if(!rows.length)return json({error:"لم يتم العثور على صفوف في الملف"},400);
+   if(rows.length>50)return json({error:"الحد الأقصى 50 مستخدمًا في الدفعة الواحدة"},400);
+   const seen=new Set(),errors=[];
+   const clean=[];
+   for(const x of rows){
+     const row=Number(x.row_no||0),username=String(x.username||'').trim(),name=String(x.name||'').trim(),password=String(x.password||''),role=String(x.role||'').trim();
+     if(!username&&!name&&!password&&!role)continue;
+     if(!username||!name||!password||!role){errors.push({row,reason:'أكمل اسم المستخدم والاسم وكلمة المرور والدور'});continue}
+     if(username.length<3){errors.push({row,reason:'اسم المستخدم يجب ألا يقل عن 3 أحرف'});continue}
+     if(password.length<8){errors.push({row,reason:'كلمة المرور يجب ألا تقل عن 8 أحرف'});continue}
+     if(!ROLE_DEFAULTS[role]){errors.push({row,reason:'الدور غير صالح. استخدم أحد الأدوار الموجودة في النموذج'});continue}
+     const key=username.toLowerCase();
+     if(seen.has(key)){errors.push({row,reason:`اسم المستخدم مكرر داخل الملف: ${username}`});continue}
+     seen.add(key);clean.push({row,username,name,password,role});
+   }
+   if(errors.length)return json({error:`لم تتم الإضافة لأن الملف يحتوي على ${errors.length} صف يحتاج إلى تصحيح.`,errors},400);
+   if(!clean.length)return json({error:'لم يتم العثور على بيانات صالحة في الملف'},400);
+   const placeholders=clean.map(()=>'?').join(',');
+   const existing=(await env.DB.prepare(`SELECT username FROM users WHERE lower(username) IN (${placeholders})`).bind(...clean.map(x=>x.username.toLowerCase())).all()).results||[];
+   if(existing.length){
+     const names=existing.map(x=>x.username).join('، ');
+     return json({error:`أسماء المستخدمين التالية موجودة مسبقًا: ${names}. لم تتم إضافة أي مستخدم.`,errors:existing.map(x=>({row:'—',reason:`${x.username} مستخدم مسبقًا`}))},400);
+   }
+   const hashed=await Promise.all(clean.map(x=>passwordHash(x.password)));
+   const statements=clean.map((x,i)=>env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES(?,?,?,?,?,1)").bind(x.username,x.name,hashed[i],x.role,(ROLE_DEFAULTS[x.role]||[]).join(',')));
+   statements.push(env.DB.prepare("INSERT INTO audit_log(record_id,user_id,action,note) VALUES(NULL,?,?,?)").bind(u.id,u.id,"استيراد مستخدمين جماعي",`تم إنشاء ${clean.length} مستخدم من ملف Excel`));
+   await env.DB.batch(statements);
+   return json({ok:true,users:clean.map(x=>({username:x.username,name:x.name,role:x.role}))});
+ }
  if(p==="/api/users"&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const b=await req.json();if(!b.username||!b.name||!b.password||!b.role)return json({error:"أكمل بيانات المستخدم"},400);if(!ROLE_DEFAULTS[b.role])return json({error:"الدور غير صالح"},400);const ps=(Array.isArray(b.permissions)?b.permissions:(ROLE_DEFAULTS[b.role]||[])).filter(x=>ALL_PERMS.includes(x));try{await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES(?,?,?,?,?,1)").bind(b.username,b.name,await passwordHash(b.password),b.role,ps.join(",")).run()}catch{return json({error:"اسم المستخدم مستخدم مسبقاً"},400)}await log(env,null,u.id,"إنشاء مستخدم",`${b.name} — ${b.role}`);return json({ok:true})}
  const um=p.match(/^\/api\/users\/(\d+)$/);if(um&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const id=Number(um[1]),b=await req.json(),target=await env.DB.prepare("SELECT * FROM users WHERE id=?").bind(id).first();if(!target)return json({error:"المستخدم غير موجود"},404);const nextRole=b.role||target.role,nextActive=b.active===undefined?Number(target.active):b.active?1:0;if(!ROLE_DEFAULTS[nextRole])return json({error:"الدور غير صالح"},400);const ps=(b.permissions||[]).filter(x=>ALL_PERMS.includes(x));if(b.action==="toggle"&&target.username!=="admin")await env.DB.prepare("UPDATE users SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").bind(id).run();else{await env.DB.prepare("UPDATE users SET name=?,role=?,permissions=?,active=? WHERE id=?").bind(b.name||target.name,nextRole,ps.join(","),nextActive,id).run();if(b.password)await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await passwordHash(b.password),id).run()}await log(env,null,u.id,"تعديل مستخدم",target.name);return json({ok:true})}
  if(p==="/api/admin/clear-test-data"&&req.method==="POST"){

@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.5.0";
+const APP_VERSION="20.6.0";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -385,7 +385,7 @@ function recordCard(r){
   return `<div class="v3-case-row" data-record-id="${r.id}">
     <div class="v3-case-identity">
       <span class="v3-case-number">#${r.id}</span>
-      <div><strong>${esc(r.employee_name)}</strong><small>${esc(r.employee_no||"—")}</small></div>
+      <div><strong>${esc(r.employee_name||"—")} <span class="employeeInlineNo">— ${esc(r.employee_no||"—")}</span></strong><small>معاملة الموظف</small></div>
     </div>
     <div class="v3-case-type" onclick="event.stopPropagation();copyRecordValue(${JSON.stringify(String(r.transaction_no||""))},'رقم المعاملة')"><span class="v3-label">رقم معاملة التعيين</span><b class="v3-monoValue copyValue" title="اضغط للنسخ">${esc(r.transaction_no||"—")}</b></div>
     <div class="v3-case-assignee"><span class="v3-label">المسؤول</span><b>${esc(r.responsible_user_name||"—")}</b></div>
@@ -443,7 +443,10 @@ async function openRecord(id){
   if(existing){existing.remove();selectedRecord=null;return;}
   document.querySelectorAll('.recordInlineDetails').forEach(x=>x.remove());
   if(!row)return;
-  const detail=document.createElement('div');detail.className='recordInlineDetails';detail.dataset.recordId=id;detail.innerHTML=`<div class="recordSheet v4-sheet"><button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">× إغلاق</button><div class="loading">جاري تحميل المعاملة…</div></div>`;
+  const detail=document.createElement('div');
+  detail.className='recordInlineDetails';
+  detail.dataset.recordId=id;
+  detail.innerHTML=`<div class="recordSheet v5-sheet"><button class="modalClose v5-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button><div class="loading">جاري تحميل المعاملة…</div></div>`;
   row.insertAdjacentElement('afterend',detail);
   try{
     const d=await api(`/api/records/${id}`),r=d.record,events=d.events||[];
@@ -451,63 +454,75 @@ async function openRecord(id){
     const actionNo=r.interruption_transaction_no||"";
     const withdrawn=["responsible_withdrawn","final_withdrawn"].includes(r.status);
     const finished=["final_documented","final_withdrawn","cancelled","stopped"].includes(r.status);
+    const employeeTitle=`${r.employee_name||"—"} — ${r.employee_no||"—"}`;
+    const status=statusLabel[r.status]||r.status||"—";
 
     const identity=`
-      <section class="v4-identity">
-        <div class="v4-identity-main">
-          <div class="v4-case-mark">CASE<br><b>#${r.id}</b></div>
-          <div>
-            <span class="v4-eyebrow">معاملة موظف</span>
-            <h2>${esc(r.employee_name)}</h2>
-            <p>${esc(r.employee_no||"—")} <i>•</i> تعيين</p>
+      <section class="v5-hero">
+        <div class="v5-hero-main">
+          <div class="v5-person-mark">${esc((r.employee_name||"م").trim().slice(0,1))}</div>
+          <div class="v5-title-wrap">
+            <span class="v5-kicker">تفاصيل المعاملة · #${esc(r.id)}</span>
+            <h2>${esc(employeeTitle)}</h2>
+            <p>رقم معاملة التعيين <b>${esc(r.transaction_no||"—")}</b> <i>·</i> آخر تحديث ${fmtDateTime(r.updated_at)}</p>
           </div>
         </div>
-        <div class="v4-identity-status">
-          <span class="v4-status ${finished?'done':withdrawn?'danger':'pending'}">${esc(statusLabel[r.status]||r.status)}</span>
-          <small>آخر تحديث ${fmtDateTime(r.updated_at)}</small>
-        </div>
+        <div class="v5-hero-status"><span class="v5-status ${finished?'done':withdrawn?'danger':'pending'}">${esc(status)}</span><button class="v5-closeText" onclick="closeRecord()">إغلاق</button></div>
       </section>`;
 
-    const overview=`
-      <section class="v4-panel">
-        <div class="v4-panel-head"><div><span class="v4-eyebrow">OVERVIEW</span><h3>ملخص المعاملة</h3></div></div>
-        <div class="v4-overview-grid">
-          <div><span>رقم معاملة التعيين</span><b>${esc(r.transaction_no||"—")}</b></div>
-          <div><span>تاريخ المباشرة</span><b>${fmtDate(r.start_date)}</b></div><div><span>تاريخ المعاملة</span><b>${fmtDate(r.transaction_date||r.start_date)}</b></div>
-          <div><span>المسؤول</span><b>${esc(r.responsible_user_name||"—")}</b></div>
-          <div><span>مقدم الطلب</span><b>${esc(r.requester_name||"—")}</b></div>
-          ${withdrawn?`<div class="v4-withdraw-data"><span>الانقطاع / اتخاذ الإجراء</span><b>${esc(actionNo||"—")}</b></div><div class="v4-withdraw-data"><span>آخر يوم عمل</span><b>${fmtDate(r.end_date)}</b></div>`:""}
-        </div>
+    const quick=`
+      <section class="v5-quickbar">
+        <div><span>الموظف</span><b>${esc(r.employee_name||"—")}</b></div>
+        <div><span>الرقم الوظيفي</span><b class="mono">${esc(r.employee_no||"—")}</b></div>
+        <div><span>رقم المعاملة</span><b class="mono copyValue" onclick="copyRecordValue(${JSON.stringify(String(r.transaction_no||""))},'رقم المعاملة')">${esc(r.transaction_no||"—")}</b></div>
+        <div><span>تاريخ المعاملة</span><b>${fmtDate(r.transaction_date||r.start_date)}</b></div>
+        <div><span>المسؤول</span><b>${esc(r.responsible_user_name||"—")}</b></div>
+        <div><span>مقدم الطلب</span><b>${esc(r.requester_name||"—")}</b></div>
+      </section>`;
+
+    const workflow=`
+      <section class="v5-card v5-action-card">
+        <div class="v5-card-head"><div><span class="v5-kicker">ACTION</span><h3>الإجراء الحالي</h3></div></div>
+        ${actionsHtml(r)}
       </section>`;
 
     const activity=events.length?events.slice().reverse().map((e,n)=>`
-      <div class="v4-event">
-        <span class="v4-event-dot ${n===0?'current':''}"></span>
+      <div class="v5-event">
+        <span class="v5-event-dot ${n===0?'current':''}"></span>
         <div><b>${esc(e.action)}</b><small>${fmtDateTime(e.created_at)} · ${esc(e.actor_name||"النظام")}</small>${e.note?`<p>${esc(e.note)}</p>`:""}</div>
-      </div>`).join(""):`<div class="emptyState">لا يوجد نشاط مسجل</div>`;
+      </div>`).join(''):`<div class="emptyState">لا يوجد نشاط مسجل</div>`;
 
-    let actionHtml=actionsHtml(r);
-    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button>
+    const detailGrid=`
+      <section class="v5-card">
+        <div class="v5-card-head"><div><span class="v5-kicker">DETAILS</span><h3>بيانات المعاملة</h3></div></div>
+        <div class="v5-detail-grid">
+          <div><span>تاريخ المباشرة</span><b>${fmtDate(r.start_date)}</b></div>
+          <div><span>تاريخ الإنشاء</span><b>${fmtDateTime(r.created_at)}</b></div>
+          <div><span>المسؤول الحالي</span><b>${esc(r.responsible_user_name||"—")}</b></div>
+          <div><span>مقدم الطلب</span><b>${esc(r.requester_name||"—")}</b></div>
+          ${withdrawn?`<div class="v5-alertField"><span>رقم معاملة الانقطاع / اتخاذ الإجراء</span><b>${esc(actionNo||"—")}</b></div><div class="v5-alertField"><span>آخر يوم عمل</span><b>${fmtDate(r.end_date)}</b></div>`:''}
+        </div>
+      </section>`;
+
+    document.querySelector('.recordSheet').innerHTML=`
       ${identity}
-      <div class="v4-body">
-        <main class="v4-main">
-          ${overview}
-          <section class="v4-panel v4-action-panel">
-            <div class="v4-panel-head"><div><span class="v4-eyebrow">ACTION</span><h3>الإجراء</h3></div></div>
-            ${actionHtml}
-          </section>
+      ${quick}
+      <div class="v5-layout">
+        <main class="v5-main">
+          ${workflow}
+          ${detailGrid}
         </main>
-        <aside class="v4-side">
-          <section class="v4-panel">
-            <div class="v4-panel-head"><div><span class="v4-eyebrow">ACTIVITY</span><h3>سجل المعاملة</h3></div></div>
-            <div class="v4-events">${activity}</div>
+        <aside class="v5-side">
+          <section class="v5-card v5-activity-card">
+            <div class="v5-card-head"><div><span class="v5-kicker">ACTIVITY</span><h3>سجل المعاملة</h3></div><span class="v5-count">${events.length}</span></div>
+            <div class="v5-events">${activity}</div>
           </section>
         </aside>
       </div>`;
     startLiveTimers();
   }catch(e){
     const msg=String(e?.message||"تعذر تحميل المعاملة");
-    document.querySelector(".recordSheet").innerHTML=`<button class="modalClose v4-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button><div class="cw-error"><b>تعذر تحميل المعاملة</b><span>${esc(msg)}</span><button onclick="closeRecord()">إغلاق</button></div>`;
+    document.querySelector('.recordSheet').innerHTML=`<button class="modalClose v5-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button><div class="cw-error"><b>تعذر تحميل المعاملة</b><span>${esc(msg)}</span><button onclick="closeRecord()">إغلاق</button></div>`;
   }
 }
 function finishedStatusClass(status){
@@ -707,17 +722,72 @@ function downloadRows(rows,name){
 }
 async function users(){
   if(!can("manage_users")){toast("لا تملك صلاحية إدارة المستخدمين","err");return}
-  VIEW="users";navActive("users");title("المستخدمون والتفويض","إدارة الوصول والتفويض المركزي للمعاملات الحالية والمستقبلية.");
+  VIEW="users";navActive("users");title("المستخدمون والتفويض","إدارة الحسابات والصلاحيات والتفويض المركزي.");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري تحميل المستخدمين…</div>`;
   try{
     const [ud,dd]=await Promise.all([api("/api/users"),api("/api/delegations")]);
     usersCache=ud.users||[];
-    v.innerHTML=`<section class="section"><div class="sectionHead"><div><h2>الحسابات</h2></div><div class="headActions"><button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div></div><div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div></section>
-    <section class="section"><div class="sectionHead"><div><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
+    v.innerHTML=`
+      <section class="section usersWorkspace">
+        <div class="sectionHead usersHeroHead">
+          <div><span class="eyebrow">ACCESS CONTROL</span><h2>إدارة المستخدمين</h2><p>إنشاء الحسابات، تعديل الصلاحيات، والاستيراد الجماعي من Excel.</p></div>
+          <div class="headActions"><button class="soft" onclick="downloadUsersTemplate()">↓ نموذج Excel للمستخدمين</button><button class="primary" onclick="userForm()">＋ مستخدم جديد</button></div>
+        </div>
+        <section class="bulkUsersCard">
+          <div class="bulkUsersIntro"><span class="bulkUsersIcon">01</span><div><h3>إضافة عدة مستخدمين دفعة واحدة</h3><p>حمّل النموذج، عبّئ اسم المستخدم والاسم وكلمة المرور والدور، ثم ارفع الملف. يتم التحقق من جميع الصفوف قبل إنشاء أي حساب.</p></div></div>
+          <div class="bulkUsersSteps"><span><b>1</b> تحميل النموذج</span><span><b>2</b> تعبئة البيانات</span><span><b>3</b> رفع الملف</span><span><b>4</b> مراجعة النتيجة</span></div>
+          <div class="bulkUsersUpload" id="usersDropzone"><div class="uploadGlyph">↑</div><div><b id="usersFileName">اسحب ملف Excel هنا أو اضغط للاختيار</b><small>XLSX · XLS · CSV · حتى 50 مستخدمًا في الدفعة</small></div><input id="usersFileInput" type="file" accept=".xlsx,.xls,.csv"></div>
+          <div class="bulkUsersActions"><button class="primary big" onclick="importUsersFile()">فحص الملف وإضافة المستخدمين</button><span id="usersImportMsg"></span></div>
+        </section>
+        <section class="sectionSub usersListSection"><div class="sectionHead"><div><span class="eyebrow">ACCOUNTS</span><h3>الحسابات الحالية <span class="sectionCount">${usersCache.length}</span></h3></div><button class="ghost" onclick="users()">تحديث</button></div>
+          <div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div>
+        </section>
+      </section>
+      <section class="section"><div class="sectionHead"><div><span class="eyebrow">DELEGATION</span><h2>التفويض</h2></div></div><div class="delegationCreate"><label>المفوِّض<select id="delSource">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>المفوَّض إليه<select id="delTarget">${ud.users.filter(x=>x.active).map(x=>`<option value="${x.id}">${esc(x.name)} — ${roleLabel[x.role]}</option>`).join("")}</select></label><label>يبدأ في<input id="delStart" type="datetime-local"></label><label>ينتهي في<input id="delEnd" type="datetime-local"></label><label class="wide">ملاحظة<input id="delNote" placeholder="سبب أو نطاق التفويض"></label><button class="primary wide" onclick="createDelegation()">تفعيل التفويض</button></div><div class="delegationTable">${(dd.delegations||[]).filter(x=>x.active).map(d=>`<div class="delegationRow"><div><b>${esc(d.source_name||"—")}</b><span>→</span><b>${esc(d.target_name||"—")}</b></div><small>${fmtDateTime(d.starts_at)}${d.ends_at?" — "+fmtDateTime(d.ends_at):" — مفتوح"}</small><button class="danger" onclick="revokeDelegation(${d.id})">إلغاء</button></div>`).join("")||emptyState("لا يوجد تفويض نشط")}</div></section>`;
+    const dz=document.querySelector('#usersDropzone'),fi=document.querySelector('#usersFileInput');
+    if(dz&&fi){dz.onclick=e=>{if(e.target!==fi)fi.click()};fi.onchange=()=>{if(fi.files[0])document.querySelector('#usersFileName').textContent=fi.files[0].name};["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0]){fi.files=e.dataTransfer.files;document.querySelector('#usersFileName').textContent=e.dataTransfer.files[0].name}})}
   }catch(e){v.innerHTML=errorState(e.message);}
 }
 function togglePermGroup(btn){const group=btn.closest(".permGroup");if(!group)return;const boxes=[...group.querySelectorAll("input[name=perm]")];const all=boxes.length&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 function userFormById(id){const x=usersCache.find(u=>Number(u.id)===Number(id));if(x)userForm(x);else toast("تعذر العثور على المستخدم","err");}
+async function downloadUsersTemplate(){
+  try{
+    const a=document.createElement('a');a.href='/user_bulk_template.xlsx';a.download='نموذج_إضافة_المستخدمين_الجماعي.xlsx';document.body.appendChild(a);a.click();a.remove();
+  }catch(e){toast('تعذر تحميل نموذج المستخدمين','err')}
+}
+function normalizeUserRole(v){
+  const s=String(v||'').trim().toLowerCase();
+  const map={
+    'مدير النظام':'admin','admin':'admin','administrator':'admin',
+    'مدير':'manager','manager':'manager',
+    'مشرف':'supervisor','supervisor':'supervisor',
+    'hr':'requester','موارد بشرية':'requester','requester':'requester',
+    'مسؤول':'responsible','responsible':'responsible',
+    'مشاهد':'viewer','viewer':'viewer'
+  };
+  return map[s]||'';
+}
+async function importUsersFile(){
+  const file=document.querySelector('#usersFileInput')?.files?.[0],msg=document.querySelector('#usersImportMsg');
+  if(!file)return toast('اختر ملف المستخدمين أولاً','err');
+  const btn=document.querySelector('.bulkUsersActions .primary');
+  try{
+    if(btn){btn.disabled=true;btn.textContent='جاري الفحص…'}
+    msg.innerHTML='<span class="loadingMini">جاري فحص الملف والتحقق من جميع الصفوف…</span>';
+    const XLSX=await ensureXLSX();
+    const wb=XLSX.read(await file.arrayBuffer(),{cellDates:false,raw:false});
+    const sheet=wb.Sheets[wb.SheetNames[0]];const raw=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:false});
+    if(!raw.length)throw Error('الملف فارغ. استخدم النموذج ثم أضف المستخدمين.');
+    if(raw.length>50)throw Error('الحد الأقصى 50 مستخدمًا في الدفعة الواحدة.');
+    const rows=raw.map((x,i)=>({row_no:i+2,username:firstVal(x,['اسم المستخدم','اسم المستخدم للنظام','username']),name:firstVal(x,['الاسم','اسم الموظف','name']),password:firstVal(x,['كلمة المرور','password']),role:normalizeUserRole(firstVal(x,['الدور','role']))}));
+    const d=await api('/api/users/bulk',{method:'POST',body:JSON.stringify({rows})});
+    const created=d.users||[];
+    let html=`<div class="bulkResult ok"><b>تمت إضافة ${created.length} مستخدم${created.length===1?'':'ين'} بنجاح.</b><span>لم يتم إنشاء أي صف إذا كان الملف يحتوي على خطأ.</span>`;
+    if(created.length)html+=`<div class="bulkResultList">${created.map(x=>`<span>${esc(x.name)} <small>${esc(x.username)}</small></span>`).join('')}</div>`;
+    html+=`</div>`;msg.innerHTML=html;toast(`تمت إضافة ${created.length} مستخدم بنجاح`);await users();
+  }catch(e){msg.innerHTML=`<div class="bulkResult err"><b>لم تتم إضافة أي مستخدم.</b><span>${esc(e.message)}</span></div>`;toast(e.message,'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='فحص الملف وإضافة المستخدمين'}}
+}
 function userForm(x={role:"requester",permissions:roleDefaults.requester}){
   const suggested=(x.id?((x.permissions&&x.permissions.length)?x.permissions:roleDefaults[x.role]||[]):(x.permissions&&x.permissions.length?x.permissions:roleDefaults[x.role]||[]));
   const checks=Object.entries(permLabel).map(([k,v])=>`<label class="permCheck"><input type="checkbox" name="perm" value="${k}" ${suggested.includes(k)?"checked":""}><span>${v}</span></label>`).join("");
@@ -798,7 +868,7 @@ document.addEventListener("pointerdown",e=>{
   const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
   if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
 });
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;window.toggleMobileMore=toggleMobileMore;window.togglePassword=togglePassword;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.downloadUsersTemplate=downloadUsersTemplate;window.importUsersFile=importUsersFile;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;window.toggleMobileMore=toggleMobileMore;window.togglePassword=togglePassword;
 boot();
 
 
