@@ -557,7 +557,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
    const hashed=[];
    for(const x of clean) hashed.push(await passwordHashWithIterations(x.password,BULK_PBKDF2_ITERATIONS));
    const statements=clean.map((x,i)=>env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES(?,?,?,?,?,1)").bind(x.username,x.name,hashed[i],x.role,(ROLE_DEFAULTS[x.role]||[]).join(',')));
-   statements.push(env.DB.prepare("INSERT INTO audit_log(record_id,user_id,action,note) VALUES(NULL,?,?,?)").bind(u.id,u.id,"استيراد مستخدمين جماعي",`تم إنشاء ${clean.length} مستخدم من ملف Excel`));
+   statements.push(env.DB.prepare("INSERT INTO audit_log(record_id,user_id,action,note) VALUES(NULL,?,?,?)").bind(u.id,"استيراد مستخدمين جماعي",`تم إنشاء ${clean.length} مستخدم من ملف Excel`));
    try{
      await env.DB.batch(statements);
    }catch(e){
