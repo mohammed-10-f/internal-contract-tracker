@@ -739,7 +739,7 @@ async function users(){
           <div class="bulkUsersUpload" id="usersDropzone"><div class="uploadGlyph">↑</div><div><b id="usersFileName">اسحب ملف Excel هنا أو اضغط للاختيار</b><small>XLSX · XLS · CSV · حتى 50 مستخدمًا في الدفعة</small></div><input id="usersFileInput" type="file" accept=".xlsx,.xls,.csv"></div>
           <div class="bulkUsersActions"><button class="primary big" onclick="importUsersFile()">فحص الملف وإضافة المستخدمين</button><span id="usersImportMsg"></span></div>
         </section>
-        <section class="sectionSub usersListSection"><div class="sectionHead"><div><span class="eyebrow">ACCOUNTS</span><h3>الحسابات الحالية <span class="sectionCount">${usersCache.length}</span></h3></div><button class="ghost" onclick="users()">تحديث</button></div>
+        <section class="sectionSub usersListSection"><div class="sectionHead"><div><span class="eyebrow">ACCOUNTS</span><h3>الحسابات الحالية <span class="sectionCount">${usersCache.length}</span></h3></div><div class="headActions"><button class="ghost" onclick="users()">تحديث</button>${ME?.role==="admin"?'<button class="danger" onclick="clearTestData()">تنظيف بيانات الاختبار</button>':''}</div></div>
           <div class="usersTable"><div class="usersHead"><span>المستخدم</span><span>الدور</span><span>الحالة</span><span>الصلاحيات</span><span></span></div>${usersCache.map(x=>`<div class="userRow"><div class="userIdentity"><span class="avatar">${esc(x.name?.[0]||"م")}</span><div><b>${esc(x.name)}</b><small>${esc(x.username)}</small></div></div><span>${roleLabel[x.role]||x.role}</span><span><em class="userState ${x.active?"on":"off"}">${x.active?"نشط":"معطل"}</em></span><span class="permCount">${(x.permissions||[]).length} صلاحية</span><div class="rowActions"><button class="soft" onclick="userFormById(${x.id})">الصلاحيات</button><button class="ghost" onclick="resetUserPassword(${x.id})">إعادة كلمة المرور</button><button class="ghost" onclick="toggleUser(${x.id})">${x.active?"تعطيل":"تفعيل"}</button></div></div>`).join("")}</div>
         </section>
       </section>
@@ -814,9 +814,22 @@ async function saveUser(id){
   }
 }
 async function clearTestData(){
-  const ok=prompt("هذا الإجراء يحذف المعاملات والمستخدمين التجريبيين والجلسات والتفويضات. اكتب RESET للتأكيد:");
-  if(ok!=="RESET")return;
-  try{await api("/api/admin/clear-test-data",{method:"POST",body:JSON.stringify({confirm:"RESET"})});toast("تم تنظيف بيانات الاختبار بنجاح");users();}catch(e){toast(e.message,"err");}
+  if(ME?.role!=="admin")return toast("هذه العملية متاحة لمدير النظام فقط","err");
+  const shade=document.createElement("div");
+  shade.className="modalShade";
+  shade.innerHTML=`<div class="confirmModal dangerModal"><button class="modalClose" aria-label="إغلاق">×</button><div class="dangerIcon">!</div><span class="eyebrow">DATA RESET</span><h2>تنظيف بيانات الاختبار</h2><p>سيتم حذف جميع المعاملات، مراحلها، التفويضات، المستخدمين غير الإداريين، وسجل النشاط. سيبقى <b>حساب مدير النظام الحالي فقط</b>، ولن يتم تغيير إعدادات النظام أو الصلاحيات الأساسية.</p><div class="dangerList"><span>✓ حذف جميع المعاملات</span><span>✓ حذف جميع سجلات النشاط</span><span>✓ حذف المستخدمين غير الإداريين</span><span>✓ الإبقاء على حساب المدير الحالي وتسجيل دخوله</span></div><label>للتأكيد اكتب <b>RESET</b><input id="resetConfirm" autocomplete="off" placeholder="RESET"></label><div class="userFormActions"><button class="ghost" id="cancelReset">إلغاء</button><button class="danger" id="confirmReset" disabled>تنظيف النظام</button></div></div>`;
+  document.body.appendChild(shade);
+  const close=()=>shade.remove();
+  shade.querySelector(".modalClose").onclick=close; shade.querySelector("#cancelReset").onclick=close;
+  const input=shade.querySelector("#resetConfirm"),btn=shade.querySelector("#confirmReset");
+  input.oninput=()=>{btn.disabled=input.value.trim()!=="RESET"};
+  btn.onclick=async()=>{
+    if(input.value.trim()!=="RESET")return;
+    btn.disabled=true;btn.textContent="جاري التنظيف…";
+    try{await api("/api/admin/clear-test-data",{method:"POST",body:JSON.stringify({confirm:"RESET"})});close();toast("تم تنظيف النظام. تم الإبقاء على حساب مدير النظام فقط");await users();}
+    catch(e){btn.disabled=false;btn.textContent="تنظيف النظام";toast(e.message,"err");}
+  };
+  input.focus();
 }
 async function resetUserPassword(id){
   try{

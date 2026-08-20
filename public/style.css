@@ -1401,3 +1401,8 @@ select{
 
 .employeeInlineNo{font-weight:700;color:var(--slate-500);font-family:var(--font-mono);font-size:.86em;white-space:nowrap}
 @media(max-width:650px){.employeeInlineNo{font-size:.82em}}
+
+/* V20.6.1 — admin data reset */
+.confirmModal{width:min(620px,calc(100vw - 32px));background:#fff;border:1px solid #dce5f0;border-radius:22px;box-shadow:0 24px 70px rgba(10,20,36,.22);padding:28px;position:relative}
+.confirmModal .dangerIcon{width:48px;height:48px;border-radius:14px;background:#fff1f0;color:#b42318;display:grid;place-items:center;font-weight:900;font-size:22px;margin-bottom:12px}
+.confirmModal h2{margin:6px 0 10px}.confirmModal p{line-height:1.8;color:#526173;margin:0 0 16px}.dangerList{display:grid;gap:8px;background:#f8fafc;border:1px solid #e5eaf0;border-radius:14px;padding:14px;margin:12px 0 18px}.dangerList span{font-size:13px}.confirmModal label{display:grid;gap:8px;font-size:13px;margin-top:12px}.confirmModal input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #d7dee8;border-radius:10px;font:inherit}.confirmModal .danger{background:#b42318;color:#fff;border:0}.confirmModal .danger:disabled{opacity:.45;cursor:not-allowed}

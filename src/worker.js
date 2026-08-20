@@ -112,15 +112,17 @@ const ROLE_DEFAULTS={
 };
 const json=(x,s=200,h={})=>new Response(JSON.stringify(x),{status:s,headers:{"content-type":"application/json;charset=utf-8",...h}});
 const PBKDF2_ITERATIONS=100000;
+const BULK_PBKDF2_ITERATIONS=25000;
 const bytesToB64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
 const b64ToBytes=s=>{const t=String(s).replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(String(s).length/4)*4,"=");const bin=atob(t);return Uint8Array.from(bin,c=>c.charCodeAt(0));};
 const legacyHash=async p=>{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(p));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")};
-const passwordHash=async p=>{
+const passwordHashWithIterations=async (p,iterations=PBKDF2_ITERATIONS)=>{
   const salt=new Uint8Array(16); crypto.getRandomValues(salt);
   const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(String(p)),"PBKDF2",false,["deriveBits"]);
-  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations:PBKDF2_ITERATIONS,hash:"SHA-256"},key,256);
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${bytesToB64(salt)}$${bytesToB64(bits)}`;
+  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations,hash:"SHA-256"},key,256);
+  return `pbkdf2$${iterations}$${bytesToB64(salt)}$${bytesToB64(bits)}`;
 };
+const passwordHash=async p=>passwordHashWithIterations(p,PBKDF2_ITERATIONS);
 const constantTimeEqual=(a,b)=>{const x=String(a||""),y=String(b||"");if(x.length!==y.length)return false;let d=0;for(let i=0;i<x.length;i++)d|=x.charCodeAt(i)^y.charCodeAt(i);return d===0};
 const verifyPassword=async(p,stored)=>{
   const s=String(stored||"");
@@ -281,7 +283,9 @@ async function handleRequest(req,env){
  if(p==="/api/me")return json({user:u?{id:u.id,name:u.name,username:u.username,role:u.role,permissions:permsOf(u)}:null});
  if(p==="/api/health"&&req.method==="GET"){try{const v=await env.DB.prepare("SELECT value FROM schema_meta WHERE key='version'").first();const r=await env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) active FROM users WHERE role='responsible'").first();const cols=await env.DB.prepare("PRAGMA table_info(records)").all();return json({ok:true,version:Number(v?.value||0),responsible_users:{total:Number(r?.c||0),active:Number(r?.active||0)},record_columns:(cols.results||[]).map(x=>x.name),user:u?{id:u.id,role:u.role,permissions:permsOf(u)}:null});}catch(e){return json({ok:false,error:String(e?.message||e)},500)}}
  if(p==="/api/setup"&&req.method==="POST"){const c=await env.DB.prepare("SELECT COUNT(*) c FROM users").first();if(Number(c.c))return json({error:"تمت التهيئة مسبقاً"},400);const b=await req.json(),h=await passwordHash(String(b.password||"1234"));await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES('admin',?,?, 'admin',?,1)").bind(b.name||"المدير",h,ALL_PERMS.join(",")).run();return json({ok:true})}
- if(p==="/api/login"&&req.method==="POST"){const b=await req.json(),username=String(b.username||"").trim(),password=String(b.password||""),x=await env.DB.prepare("SELECT * FROM users WHERE username=? AND active=1").bind(username).first();if(!x||!(await verifyPassword(password,x.password_hash))){await log(env,null,null,"محاولة دخول فاشلة",`اسم المستخدم: ${username}`);return json({error:"بيانات الدخول غير صحيحة"},401)}if(!String(x.password_hash||"").startsWith("pbkdf2$")){await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await passwordHash(password),x.id).run()}const t=token(),exp=Math.floor(Date.now()/1000)+DAYS*86400;await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at,login_at,last_seen_at,ip,user_agent) VALUES(?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)").bind(t,x.id,exp,clientIp(req),req.headers.get("User-Agent")||"—").run();await log(env,null,x.id,"تسجيل دخول",`IP: ${clientIp(req)}`);return json({ok:true},200,{"set-cookie":`${COOKIE}=${t}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${DAYS*86400}`})}
+ if(p==="/api/login"&&req.method==="POST"){const b=await req.json(),username=String(b.username||"").trim(),password=String(b.password||""),x=await env.DB.prepare("SELECT * FROM users WHERE username=? AND active=1").bind(username).first();if(!x||!(await verifyPassword(password,x.password_hash))){await log(env,null,null,"محاولة دخول فاشلة",`اسم المستخدم: ${username}`);return json({error:"بيانات الدخول غير صحيحة"},401)}const storedHash=String(x.password_hash||"");
+const storedIterations=storedHash.startsWith("pbkdf2$")?Number(storedHash.split("$")[1]||0):0;
+if(!storedHash.startsWith("pbkdf2$")||storedIterations<PBKDF2_ITERATIONS){await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await passwordHash(password),x.id).run()}const t=token(),exp=Math.floor(Date.now()/1000)+DAYS*86400;await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at,login_at,last_seen_at,ip,user_agent) VALUES(?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)").bind(t,x.id,exp,clientIp(req),req.headers.get("User-Agent")||"—").run();await log(env,null,x.id,"تسجيل دخول",`IP: ${clientIp(req)}`);return json({ok:true},200,{"set-cookie":`${COOKIE}=${t}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${DAYS*86400}`})}
  if(p==="/api/logout"){const t=cookie(req);if(t){const s=await env.DB.prepare("SELECT user_id FROM sessions WHERE token=?").bind(t).first();if(s)await log(env,null,s.user_id,"تسجيل خروج",`IP: ${clientIp(req)}`);await env.DB.prepare("UPDATE sessions SET logout_at=CURRENT_TIMESTAMP,last_seen_at=CURRENT_TIMESTAMP WHERE token=?").bind(t).run();await env.DB.prepare("DELETE FROM sessions WHERE token=?").bind(t).run()}return json({ok:true},200,{"set-cookie":`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`})}
  if(!u)return json({error:"غير مصرح"},401);
  if(p==="/api/delegations"&&req.method==="GET"){
@@ -547,28 +551,45 @@ return json({record:withMeta(r),events:ev.results,stages})}
      const names=existing.map(x=>x.username).join('، ');
      return json({error:`أسماء المستخدمين التالية موجودة مسبقًا: ${names}. لم تتم إضافة أي مستخدم.`,errors:existing.map(x=>({row:'—',reason:`${x.username} مستخدم مسبقًا`}))},400);
    }
-   const hashed=await Promise.all(clean.map(x=>passwordHash(x.password)));
+   // Bulk creation uses a lower per-user PBKDF2 cost to keep a single Worker request
+   // within Cloudflare CPU limits. Individual password changes/login upgrades keep the
+   // stronger 100k-iteration setting above; the verifier supports both formats.
+   const hashed=[];
+   for(const x of clean) hashed.push(await passwordHashWithIterations(x.password,BULK_PBKDF2_ITERATIONS));
    const statements=clean.map((x,i)=>env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES(?,?,?,?,?,1)").bind(x.username,x.name,hashed[i],x.role,(ROLE_DEFAULTS[x.role]||[]).join(',')));
    statements.push(env.DB.prepare("INSERT INTO audit_log(record_id,user_id,action,note) VALUES(NULL,?,?,?)").bind(u.id,u.id,"استيراد مستخدمين جماعي",`تم إنشاء ${clean.length} مستخدم من ملف Excel`));
-   await env.DB.batch(statements);
+   try{
+     await env.DB.batch(statements);
+   }catch(e){
+     return json({error:`تعذر إكمال استيراد المستخدمين ولم تتم إضافة أي مستخدم. ${String(e?.message||e)}`},500);
+   }
    return json({ok:true,users:clean.map(x=>({username:x.username,name:x.name,role:x.role}))});
  }
  if(p==="/api/users"&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const b=await req.json();if(!b.username||!b.name||!b.password||!b.role)return json({error:"أكمل بيانات المستخدم"},400);if(!ROLE_DEFAULTS[b.role])return json({error:"الدور غير صالح"},400);const ps=(Array.isArray(b.permissions)?b.permissions:(ROLE_DEFAULTS[b.role]||[])).filter(x=>ALL_PERMS.includes(x));try{await env.DB.prepare("INSERT INTO users(username,name,password_hash,role,permissions,active) VALUES(?,?,?,?,?,1)").bind(b.username,b.name,await passwordHash(b.password),b.role,ps.join(",")).run()}catch{return json({error:"اسم المستخدم مستخدم مسبقاً"},400)}await log(env,null,u.id,"إنشاء مستخدم",`${b.name} — ${b.role}`);return json({ok:true})}
  const um=p.match(/^\/api\/users\/(\d+)$/);if(um&&req.method==="POST"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const id=Number(um[1]),b=await req.json(),target=await env.DB.prepare("SELECT * FROM users WHERE id=?").bind(id).first();if(!target)return json({error:"المستخدم غير موجود"},404);const nextRole=b.role||target.role,nextActive=b.active===undefined?Number(target.active):b.active?1:0;if(!ROLE_DEFAULTS[nextRole])return json({error:"الدور غير صالح"},400);const ps=(b.permissions||[]).filter(x=>ALL_PERMS.includes(x));if(b.action==="toggle"&&target.username!=="admin")await env.DB.prepare("UPDATE users SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?").bind(id).run();else{await env.DB.prepare("UPDATE users SET name=?,role=?,permissions=?,active=? WHERE id=?").bind(b.name||target.name,nextRole,ps.join(","),nextActive,id).run();if(b.password)await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await passwordHash(b.password),id).run()}await log(env,null,u.id,"تعديل مستخدم",target.name);return json({ok:true})}
  if(p==="/api/admin/clear-test-data"&&req.method==="POST"){
-  if(u.role!=="admin"||!allow(u,"manage_data"))return json({error:"للمدير فقط"},403);
+  if(u.role!=="admin"||!allow(u,"manage_data"))return json({error:"هذه العملية متاحة لمدير النظام فقط"},403);
   const b=await req.json().catch(()=>({}));
   if(String(b.confirm||"")!=="RESET")return json({error:"اكتب RESET للتأكيد"},400);
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM record_stages"),
-    env.DB.prepare("DELETE FROM audit_log WHERE record_id IS NOT NULL OR user_id IS NOT NULL"),
-    env.DB.prepare("DELETE FROM sessions"),
-    env.DB.prepare("DELETE FROM delegations_v2"),
-    env.DB.prepare("DELETE FROM records"),
-    env.DB.prepare("DELETE FROM users WHERE username<>? AND role<>? ").bind("admin","admin")
-  ]);
-  await log(env,null,u.id,"تنظيف بيانات الاختبار","تم حذف المعاملات والمستخدمين التجريبيين والإسنادات والتفويضات والجلسات");
-  return json({ok:true});
+  const adminId=Number(u.id);
+  try{
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM record_stages"),
+      env.DB.prepare("DELETE FROM delegations_v2"),
+      env.DB.prepare("DELETE FROM records"),
+      env.DB.prepare("DELETE FROM audit_log"),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id<>?").bind(adminId),
+      env.DB.prepare("DELETE FROM users WHERE id<>?").bind(adminId),
+      env.DB.prepare("DELETE FROM sqlite_sequence WHERE name IN ('records','record_stages','delegations_v2','audit_log','sessions')"),
+      env.DB.prepare("UPDATE sqlite_sequence SET seq=? WHERE name='users'").bind(adminId)
+    ]);
+    dashboardCache.clear();
+    seenSessions.clear();
+    seenSessions.set(cookie(req),Date.now());
+    return json({ok:true,message:"تمت إعادة النظام إلى حالة البداية مع الإبقاء على حساب مدير النظام فقط"});
+  }catch(e){
+    return json({error:`تعذر تنظيف بيانات الاختبار: ${String(e?.message||e)}`},500);
+  }
 }
  if(p==="/api/audit"&&req.method==="GET"){if(!allow(u,"view_audit_log"))return json({error:"ليس لديك صلاحية سجل النشاط"},403);const q=url.searchParams.get("q")||"",action=url.searchParams.get("action")||"",from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";let sql=`SELECT a.*,u.name actor_name,u.username, u.role FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE 1=1`,args=[];if(q){sql+=" AND (u.name LIKE ? OR u.username LIKE ? OR a.action LIKE ? OR a.note LIKE ?)";const z="%"+q+"%";args.push(z,z,z,z)}if(action){sql+=" AND a.action=?";args.push(action)}if(from){sql+=" AND a.created_at>=?";args.push(from+" 00:00:00")}if(to){sql+=" AND a.created_at<=?";args.push(to+" 23:59:59")}sql+=" ORDER BY a.id DESC LIMIT 2000";const rows=(await env.DB.prepare(sql).bind(...args).all()).results;const sessions=(await env.DB.prepare(`SELECT s.*,u.name,u.username,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.expires_at>? ORDER BY s.login_at DESC LIMIT 300`).bind(Math.floor(Date.now()/1000)).all()).results;return json({events:rows,sessions})}
  if(p==="/api/audit/export"&&req.method==="GET"){if(!allow(u,"export_audit_log"))return json({error:"ليس لديك صلاحية تصدير سجل النشاط"},403);const rows=(await env.DB.prepare(`SELECT a.created_at AS "التاريخ والوقت",u.name AS "المستخدم",u.username AS "اسم المستخدم",u.role AS "الدور",a.action AS "النشاط",a.record_id AS "رقم المعاملة",a.note AS "التفاصيل" FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 10000`).all()).results;return json({rows,report_date:reportDate()})}
