@@ -492,9 +492,13 @@ return json({record:withMeta(r),events:ev.results,stages})}
   const isAll=requestedRaw.toLowerCase()==="all";
   if(u.role==="responsible" && (isAll || Number(requestedRaw||u.id)!==u.id))return json({error:"غير مصرح"},403);
   if(!requestedRaw && u.role!=="responsible")return json({error:"اختر المستخدم المسؤول"},400);
-  const dateParts=[];if(from)dateParts.push("r.created_at>=?");if(to)dateParts.push("r.created_at<=?");
-  const dateSql=dateParts.length?" AND "+dateParts.join(" AND "):"";const dateArgs=[];if(from)dateArgs.push(from+" 00:00:00");if(to)dateArgs.push(to+" 23:59:59");
-  const touchedSql=(userExpr)=>`SELECT DISTINCT r.id,r.status FROM records r JOIN record_stages rs ON rs.record_id=r.id WHERE rs.stage='responsible' ${userExpr}${dateSql}`;
+  if(from && to && from>to)return json({error:"تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"},400);
+  const dateParts=[];if(from)dateParts.push("date(datetime(rs.started_at,'+3 hours'))>=?");if(to)dateParts.push("date(datetime(rs.started_at,'+3 hours'))<=?");
+  const dateSql=dateParts.length?" AND "+dateParts.join(" AND "):"";const dateArgs=[];if(from)dateArgs.push(from);if(to)dateArgs.push(to);
+  // Performance periods are based on when the transaction entered the responsible stage,
+  // not when the record was originally created. This keeps the report aligned with the
+  // work actually handled by the responsible during the selected period.
+  const touchedSql=(userExpr)=>`SELECT DISTINCT r.id,r.status FROM records r JOIN record_stages rs ON rs.record_id=r.id WHERE rs.stage='responsible' AND rs.started_at IS NOT NULL ${userExpr}${dateSql}`;
   let rows=[],manager;
   if(isAll){
     rows=(await env.DB.prepare(touchedSql("")).bind(...dateArgs).all()).results||[];
@@ -507,7 +511,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
     rows=(await env.DB.prepare(touchedSql(" AND rs.user_id=?")).bind(managerId,...dateArgs).all()).results||[];
   }
   const total=rows.length,documented=rows.filter(r=>r.status==='final_documented').length,withdrawn=rows.filter(r=>r.status==='final_withdrawn').length;
-  const overdueSql=`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' ${isAll?'':' AND rs.user_id=?'}${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`;
+  const overdueSql=`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.started_at IS NOT NULL ${isAll?'':' AND rs.user_id=?'}${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`;
   const overdueArgs=isAll?[...dateArgs,SLA_HOURS*3600]:[Number(manager.id),...dateArgs,SLA_HOURS*3600];
   const overdueStage=await env.DB.prepare(overdueSql).bind(...overdueArgs).all();
   const delayedIds=new Set((overdueStage.results||[]).map(x=>Number(x.record_id)));const overdue=delayedIds.size;
@@ -517,7 +521,7 @@ return json({record:withMeta(r),events:ev.results,stages})}
   for(const person of users){
     const pr=await env.DB.prepare(touchedSql(" AND rs.user_id=?")).bind(person.id,...dateArgs).all();
     const prows=pr.results||[];
-    const pdel=await env.DB.prepare(`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
+    const pdel=await env.DB.prepare(`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.started_at IS NOT NULL AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
     const ids=new Set((pdel.results||[]).map(x=>Number(x.record_id)));
     comparison.push({id:person.id,name:person.name,username:person.username,role:person.role,total:prows.length,documented:prows.filter(r=>r.status==='final_documented').length,withdrawn:prows.filter(r=>r.status==='final_withdrawn').length,overdue:ids.size,closed_after_delay:prows.filter(r=>ids.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length});
   }

@@ -131,7 +131,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.6.0";
+const APP_VERSION="20.6.2";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -683,7 +683,7 @@ async function importFile(){
   }catch(e){msg.innerHTML=`<div class="importResult err">${esc(e.message)}</div>`}
 }
 function impactMetric(label,value,total,color,percent=false){const n=Number(value||0),pct=percent?n:((Number(total||0)?Math.round(n/Number(total)*100):0));return `<div class="impactMetric"><div><span>${label}</span><b>${percent?pct+"%":n}</b></div><i class="${color}" style="width:${Math.min(100,pct)}%"></i></div>`}
-async function statsPage(managerId=""){
+async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
   VIEW="stats";navActive("stats");title("تحليل الأداء","");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
@@ -694,22 +694,42 @@ async function statsPage(managerId=""){
     let selectedKey=managerId!==""?String(managerId):(storedUser||(!canCompare&&ME.role==="responsible"?String(ME.id):String(users[0]?.id||"")));
     if(canCompare && !selectedKey) selectedKey="all";
     if(!canCompare) selectedKey=String(ME.id);
-    const from=localStorage.getItem("statsFrom")||"",to=localStorage.getItem("statsTo")||"";
+    const from=overrideFrom!==null ? String(overrideFrom||"") : (localStorage.getItem("statsFrom")||"");
+    const to=overrideTo!==null ? String(overrideTo||"") : (localStorage.getItem("statsTo")||"");
+    if(from && to && from>to) throw Object.assign(Error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"),{status:400});
     const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selectedKey,from,to}).toString()}`);
     const options=canCompare
       ? `<option value="all" ${selectedKey==="all"?'selected':''}>الكل</option>${users.map(x=>`<option value="${x.id}" ${String(x.id)===selectedKey?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("")}`
       : "";
     const compareRows=canCompare ? (d.comparison||[]).map(x=>`<button class="performanceCompareRow ${String(x.id)===String(d.manager?.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("") : "";
+    const periodLabel=from||to ? `${esc(from||"بداية الفترة")} ← ${esc(to||"حتى الآن")}` : "كامل السجل";
     v.innerHTML=`<section class="section performancePage">
-      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}</div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${JSON.stringify(selectedKey)})">تطبيق</button></div></div>
+      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}<small class="statsPeriodApplied">الفترة: ${periodLabel}</small></div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${JSON.stringify(selectedKey)})">تحديث التحليل</button><button class="soft statsClearButton" onclick="clearStatsDates(${JSON.stringify(selectedKey)})">مسح التاريخ</button></div></div>
       <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div>
-      ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${from&&to?`${esc(from)} → ${esc(to)}`:"الفترة المحددة"}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة</div>`}</div></section>`:""}
+      ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${periodLabel}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة للفترة المحددة</div>`}</div></section>`:""}
     </section>`;
     enhanceSelects(v);
   }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
-function selectStatsUser(id){localStorage.setItem("statsUserId",String(id||"all"));statsPage(String(id||"all"));}
-function applyStats(id){const from=document.querySelector("#statsFrom")?.value||"",to=document.querySelector("#statsTo")?.value||"";localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");localStorage.setItem("statsUserId",selected);statsPage(selected);}
+function selectStatsUser(id){
+  const from=document.querySelector("#statsFrom")?.value ?? localStorage.getItem("statsFrom") ?? "";
+  const to=document.querySelector("#statsTo")?.value ?? localStorage.getItem("statsTo") ?? "";
+  localStorage.setItem("statsUserId",String(id||"all"));
+  localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);
+  statsPage(String(id||"all"),from,to);
+}
+function applyStats(id){
+  const from=document.querySelector("#statsFrom")?.value||"",to=document.querySelector("#statsTo")?.value||"";
+  if(from && to && from>to){toast("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية","err");return;}
+  const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");
+  localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);localStorage.setItem("statsUserId",selected);
+  statsPage(selected,from,to);
+}
+function clearStatsDates(id){
+  localStorage.removeItem("statsFrom");localStorage.removeItem("statsTo");
+  const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");
+  statsPage(selected,"","");
+}
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
 async function exportStats(id){try{const qs=new URLSearchParams({manager_id:id,from:localStorage.getItem("statsFrom")||"",to:localStorage.getItem("statsTo")||""});const d=await api("/api/export?"+qs);downloadRows(d.rows||[],"تحليل_الأداء");}catch(e){toast(e.message,"err");}}
