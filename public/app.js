@@ -1,94 +1,7 @@
-
-/* 1S v2 — permission & workflow hardening */
-function canViewCase1S(user, record){
-  const role=String(user?.role||user?.user_role||'').toLowerCase();
-  if(['admin','manager','supervisor','viewer'].includes(role)) return true;
-  if(role==='responsible'){
-    const me=String(user?.id||user?.username||'');
-    const assigned=String(record?.assigned_to??record?.responsible_manager_id??record?.manager_id??'');
-    return assigned===me || String(record?.responsible_manager_id||'')===me;
-  }
-  return !!record?.visible;
-}
-function filterByResponsibleManager1S(records, managerId){
-  if(!managerId) return records||[];
-  const id=String(managerId);
-  return (records||[]).filter(r=>String(r?.assigned_to??r?.responsible_manager_id??r?.manager_id??'')===id);
-}
-function isWithdrawn1S(record){
-  return /منسحب|withdraw/i.test(String(record?.status||''));
-}
-function buildWithdrawalSubmission1S(record, values){
-  return {record_id:record.id,status:'withdrawn',
-    last_work_day:values.last_work_day,
-    action_case_number:values.action_case_number||null,
-    note:values.note||''};
-}
-
-
-/* 1S — workflow semantics */
-const CASE_STATUS_1S = Object.freeze({
-  REQUIRED:'waiting_responsible',
-  APPROVAL:'waiting_approval',
-  WITHDRAWAL_APPROVAL:'waiting_withdrawal_approval',
-  CLOSED:'closed',
-  STOPPED:'stopped',
-  CANCELLED:'cancelled',
-  WITHDRAWN:'withdrawn'
-});
-function caseNeedsResponsibleAction1S(status){
-  return ['waiting_responsible','returned'].includes(String(status||'').toLowerCase());
-}
-function caseNeedsApproval1S(status){
-  return ['waiting_approval','waiting_withdrawal_approval'].includes(String(status||'').toLowerCase());
-}
-function caseIsFinishedForResponsible1S(status){
-  return ['closed','stopped','cancelled','withdrawn','verified','documented'].includes(String(status||'').toLowerCase());
-}
-
-
-/* V18.7 — responsible action semantics */
-function isResponsibleRequiredAction(record){
-  const s=String(record?.status||'').trim().toLowerCase();
-  return /بانتظار.*إفادة|مطلوب.*إجراء|returned|needs.?action|waiting.*responsible|correction/.test(s)
-         && !/منسحب|withdraw|cancel|ملغ/.test(s);
-}
-function isResponsibleWithdrawn(record){
-  const s=String(record?.status||'').trim().toLowerCase();
-  return /منسحب|withdraw/.test(s);
-}
-function filterResponsibleRequiredActions(records){
-  return (records||[]).filter(isResponsibleRequiredAction);
-}
-function openResponsibleExternalAction(record, action){
-  // External action must execute directly; withdrawn is not routed through
-  // the required-actions list and does not open another duplicate card.
-  if(action==='withdrawn') return window.location.assign(`/records/${record.id}?action=withdrawn`);
-  if(action==='respond') return window.location.assign(`/records/${record.id}?action=respond`);
-  if(action==='approve') return window.location.assign(`/records/${record.id}?action=approve`);
-}
-
-/* V18.5 — responsible manager workspace */
-function responsibleManagerBucket(status){
-  const s=String(status||'').trim().toLowerCase();
-  if(/بانتظار الاعتماد|waiting.*approv|pending.*approv|approval/.test(s)) return 'approval';
-  if(/مطلوب.*إجراء|waiting.*responsible|required|respond/.test(s)) return 'required';
-  // "منتهية" means all cases that have already passed through this responsible,
-  // including externally completed/withdrawn/cancelled/stopped/closed states.
-  if(/تم التوثيق|منسحب|ملغاة|موقوف|closed|document|withdraw|cancel/.test(s)) return 'completed';
-  return 'completed';
-}
-
-function buildResponsibleManagerBuckets(records){
-  const out={completed:[],approval:[],required:[]};
-  (records||[]).forEach(r=>{
-    const b=responsibleManagerBucket(r.status);
-    out[b].push(r);
-  });
-  return out;
-}
-
-
+/* Contract Control — frontend application
+ * Organization only: shared helpers, navigation, records, analytics, users, settings.
+ * This refactor intentionally preserves UI structure, labels, events, and behavior.
+ */
 const app = document.querySelector("#app");
 
 const roleLabel = {admin:"مدير النظام", manager:"مدير", supervisor:"مشرف", requester:"HR", responsible:"مسؤول", viewer:"مشاهد"};
@@ -131,7 +44,7 @@ let ME=null, VIEW="home", timerInterval=null, selectedRecord=null;
 let usersCache=[];
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const APP_VERSION="20.6.2";
+const APP_VERSION="20.6.8";
 const can = p => ME?.role==="admin" || ME?.permissions?.includes(p) || (!Array.isArray(ME?.permissions) || ME.permissions.length===0) && (roleDefaults[ME?.role]||[]).includes(p);
 const fmtDate = x => {
   if(!x) return "—";
@@ -525,26 +438,7 @@ async function openRecord(id){
     document.querySelector('.recordSheet').innerHTML=`<button class="modalClose v5-close" onclick="closeRecord()" title="إغلاق تفاصيل المعاملة" aria-label="إغلاق تفاصيل المعاملة">×</button><div class="cw-error"><b>تعذر تحميل المعاملة</b><span>${esc(msg)}</span><button onclick="closeRecord()">إغلاق</button></div>`;
   }
 }
-function finishedStatusClass(status){
-  if(["final_documented","responsible_documented"].includes(status)) return "success";
-  if(["stopped","waiting_responsible","returned","responsible_withdrawn"].includes(status)) return "warning";
-  return "";
-}
-function stageSecondsClient(rows,stage){
-  const now=Date.now();
-  return (rows||[]).filter(x=>x.stage===stage).reduce((sum,x)=>{
-    const a=new Date(String(x.started_at).replace(" ","T")+"Z").getTime();
-    const b=x.ended_at?new Date(String(x.ended_at).replace(" ","T")+"Z").getTime():now;
-    return sum+Math.max(0,Math.floor((b-a)/1000));
-  },0);
-}
 function info(label,value){return `<div><small>${label}</small><b>${esc(value||"—")}</b></div>`}
-function horizontalTimeline(r,stages){
- const defs=[['upload','رفع المعاملة','↑'],['responsible','إفادة المسؤول','✓'],['approval','الاعتماد','◆'],['closed','الإغلاق','✓']];
- const status=r.status;
- const idx=(status==='waiting_responsible'||status==='returned')?1:(status==='responsible_documented'||status==='responsible_withdrawn'?2:(['final_documented','final_withdrawn','cancelled'].includes(status)?3:0));
- return `<div class="hTimeline">${defs.map((d,i)=>{const done=i<idx||i===0&&idx>0,active=i===idx;const sec=stageSecondsClient(stages,d[0]);return `<div class="hStep ${done?'done ':''}${active?'active ':''}"><div class="hNode">${d[2]}</div><b>${d[1]}</b><small>${done?'مكتمل':active?'المرحلة الحالية':'قادم'}${sec?` · ${duration(sec)}`:''}</small></div>${i<defs.length-1?`<div class="hLine ${done?'done':''}"></div>`:''}`}).join('')}</div>`;
-}
 function actionsHtml(r){
   const admin=ME.role==="admin";
   const responsibleCan=can("respond_responsible")&&(ME.role==="responsible"||admin);
@@ -981,4 +875,3 @@ function wireDatePickers(root=document){
 }
 
 
-function applyRolePreset(role){ const modal=document.querySelector(".userModal"); const wanted=new Set(roleDefaults[role]||[]); modal?.querySelectorAll('input[name="perm"]').forEach(c=>c.checked=wanted.has(c.value)); }

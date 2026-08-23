@@ -1,91 +1,7 @@
-
-/* 1S v2 — permission & workflow hardening */
-function canViewCase1S(user, record){
-  const role=String(user?.role||user?.user_role||'').toLowerCase();
-  if(['admin','manager','supervisor','viewer'].includes(role)) return true;
-  if(role==='responsible'){
-    const me=String(user?.id||user?.username||'');
-    const assigned=String(record?.assigned_to??record?.responsible_manager_id??record?.manager_id??'');
-    return assigned===me || String(record?.responsible_manager_id||'')===me;
-  }
-  return !!record?.visible;
-}
-function filterByResponsibleManager1S(records, managerId){
-  if(!managerId) return records||[];
-  const id=String(managerId);
-  return (records||[]).filter(r=>String(r?.assigned_to??r?.responsible_manager_id??r?.manager_id??'')===id);
-}
-function isWithdrawn1S(record){
-  return /منسحب|withdraw/i.test(String(record?.status||''));
-}
-function buildWithdrawalSubmission1S(record, values){
-  return {record_id:record.id,status:'withdrawn',
-    last_work_day:values.last_work_day,
-    action_case_number:values.action_case_number||null,
-    note:values.note||''};
-}
-
-
-/* 1S — workflow semantics */
-const CASE_STATUS_1S = Object.freeze({
-  REQUIRED:'waiting_responsible',
-  APPROVAL:'waiting_approval',
-  WITHDRAWAL_APPROVAL:'waiting_withdrawal_approval',
-  CLOSED:'closed',
-  STOPPED:'stopped',
-  CANCELLED:'cancelled',
-  WITHDRAWN:'withdrawn'
-});
-function caseNeedsResponsibleAction1S(status){
-  return ['waiting_responsible','returned'].includes(String(status||'').toLowerCase());
-}
-function caseNeedsApproval1S(status){
-  return ['waiting_approval','waiting_withdrawal_approval'].includes(String(status||'').toLowerCase());
-}
-function caseIsFinishedForResponsible1S(status){
-  return ['closed','stopped','cancelled','withdrawn','verified','documented'].includes(String(status||'').toLowerCase());
-}
-
-
-/* V18.7 — responsible action semantics */
-function isResponsibleRequiredAction(record){
-  const s=String(record?.status||'').trim().toLowerCase();
-  return /بانتظار.*إفادة|مطلوب.*إجراء|returned|needs.?action|waiting.*responsible|correction/.test(s)
-         && !/منسحب|withdraw|cancel|ملغ/.test(s);
-}
-function isResponsibleWithdrawn(record){
-  const s=String(record?.status||'').trim().toLowerCase();
-  return /منسحب|withdraw/.test(s);
-}
-function filterResponsibleRequiredActions(records){
-  return (records||[]).filter(isResponsibleRequiredAction);
-}
-function openResponsibleExternalAction(record, action){
-  // Keep this helper worker-safe: the browser owns navigation.
-  const routes={withdrawn:'withdrawn',respond:'respond',approve:'approve'};
-  return routes[action]?`/records/${record.id}?action=${routes[action]}`:null;
-}
-
-/* V18.5 — responsible manager workspace */
-function responsibleManagerBucket(status){
-  const s=String(status||'').trim().toLowerCase();
-  if(/بانتظار الاعتماد|waiting.*approv|pending.*approv|approval/.test(s)) return 'approval';
-  if(/مطلوب.*إجراء|waiting.*responsible|required|respond/.test(s)) return 'required';
-  // "منتهية" means all cases that have already passed through this responsible,
-  // including externally completed/withdrawn/cancelled/stopped/closed states.
-  if(/تم التوثيق|منسحب|ملغاة|موقوف|closed|document|withdraw|cancel/.test(s)) return 'completed';
-  return 'completed';
-}
-
-function buildResponsibleManagerBuckets(records){
-  const out={completed:[],approval:[],required:[]};
-  (records||[]).forEach(r=>{
-    const b=responsibleManagerBucket(r.status);
-    out[b].push(r);
-  });
-  return out;
-}
-
+/* Contract Control — backend entry point
+ * Organization only: authentication, database, records, workflow, analytics, admin.
+ * This refactor intentionally preserves routes, payloads, permissions, and behavior.
+ */
 const COOKIE="ict_session", DAYS=30, SLA_HOURS=48, IDLE_TIMEOUT_SECONDS=1800, SCHEMA_VERSION=24;
 const dashboardCache=new Map();
 let schemaReady=null;
@@ -219,7 +135,6 @@ function canSeeClosed(u){return u?.role==="responsible" || allow(u,"view_closed"
 function parseTs(x){if(!x)return null;const s=String(x).trim().replace(" ","T");return new Date(/Z$/.test(s)?s:s+"Z").getTime()}
 function durationSeconds(r){const start=parseTs(r?.created_at);if(!start)return 0;let end=parseTs(r?.timer_end_at);if(!end&&r?.status!=="stopped")end=Date.now();if(!end)end=parseTs(r?.timer_paused_at)||Date.now();const paused=Number(r?.paused_seconds||0)*1000;return Math.max(0,Math.floor((end-start-paused)/1000))}
 function durationLabel(sec){sec=Math.max(0,Number(sec)||0);let d=Math.floor(sec/86400);sec%=86400;let h=Math.floor(sec/3600);sec%=3600;let m=Math.floor(sec/60);let s=sec%60;return `${d?d+" يوم ":""}${h?h+" ساعة ":""}${m?m+" دقيقة ":""}${s+" ثانية"}`.trim()||"0 ثانية"}
-function responseDuration(r){if(!r?.responsible_responded_at)return null;return Math.max(0,Math.floor((parseTs(r.responsible_responded_at)-parseTs(r.created_at))/1000))}
 function withMeta(r){const start=r?.created_at||null;const age=durationSeconds(r);const timerEnd=r?.timer_end_at||(r?.status==="stopped"?r?.stopped_at:null);return {...r,status_label:labels[r.status]||r.status,timer_start_at:start,timer_end_at:timerEnd,sla_hours:SLA_HOURS,age_seconds:age,duration_label:durationLabel(age),overdue:!CLOSED.includes(r.status)&&r?.status!=="stopped"&&!!start&&age>=SLA_HOURS*3600}}
 async function currentDelegation(env,sourceId){
  const now=nowIso();
@@ -250,10 +165,6 @@ async function syncDelegations(env){
    await env.DB.prepare(`UPDATE records SET delegated_to_user_id=NULL,delegated_from_user_id=NULL,delegated_at=NULL WHERE requester_id=? AND delegated_to_user_id=? AND status NOT IN ('final_documented','final_withdrawn','cancelled','stopped')`).bind(d.source_user_id,d.target_user_id).run();
  }
 }
-async function delegatedTo(env,sourceId){
- const d=await currentDelegation(env,sourceId);
- return d?.target_user_id||null;
-}
 async function isEffectiveRequester(env,r,u){
  if(!r||!u)return false;
  if(r.requester_id===u.id)return true;
@@ -267,12 +178,6 @@ function stageForStatus(status){
  if(status==="stopped")return "stopped";
  if(CLOSED.includes(status))return "closed";
  return null;
-}
-function stageSeconds(rows,stage){
- const now=Date.now(); return (rows||[]).filter(x=>x.stage===stage).reduce((sum,x)=>{
-   const a=parseTs(x.started_at), b=x.ended_at?parseTs(x.ended_at):now;
-   return sum+(a&&b?Math.max(0,Math.floor((b-a)/1000)):0);
- },0);
 }
 function reportDate(){return new Date().toISOString().slice(0,10)}
 function clientIp(req){return req.headers.get("CF-Connecting-IP")||req.headers.get("X-Forwarded-For")||"—"}
