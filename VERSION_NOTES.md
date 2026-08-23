@@ -48,3 +48,9 @@
 - KPI cards have a consistent visual height and vertically centered content.
 - Added the missing teal visual treatment for the "المعاملات النشطة الآن" indicator.
 - No business logic, API, workflow, permissions, or mobile layout changes.
+
+
+## V20.6.10 — Performance comparison alignment
+- Fixed the desktop comparison table grid: 9 visual columns now map 1:1 between headings and values.
+- Kept the existing visual design and mobile layout unchanged.
+- No workflow, API, permissions, or business logic changes.

@@ -1431,7 +1431,7 @@ select{
   .performanceComparisonZone .chartHead span{font-size:10px;color:var(--slate-500);font-weight:700;background:var(--slate-50);padding:6px 10px;border-radius:999px}
   .performanceCompare{padding:10px 12px 14px;overflow:visible}
   .performanceCompareHead,.performanceCompareRow{
-    grid-template-columns:minmax(280px,2fr) repeat(5,minmax(88px,1fr)) minmax(110px,.9fr) 32px;
+    grid-template-columns:minmax(280px,2fr) repeat(6,minmax(88px,1fr)) minmax(140px,1.1fr) 32px;
     min-width:0;
   }
   .performanceCompareHead{margin:0 0 4px;padding:10px 14px;background:#f6f8fb;border:1px solid var(--line-soft);border-radius:12px;font-size:9px;color:var(--slate-500);font-weight:800}
@@ -1504,6 +1504,34 @@ select{
     line-height:1.45;
   }
   .performanceKpis .statCard strong{line-height:1.15;}
+}
+
+/* V20.6.10 — Performance comparison column alignment fix (desktop only)
+   There are 9 visual columns: employee + 6 metrics + progress + expand.
+   Keep the mobile layout untouched. */
+@media (min-width:981px){
+  .performanceCompareHead,
+  .performanceCompareRow{
+    display:grid;
+    grid-template-columns:minmax(280px,2fr) repeat(6,minmax(88px,1fr)) minmax(140px,1.1fr) 32px;
+    align-items:center;
+    column-gap:12px;
+  }
+  .performanceCompareHead > span,
+  .performanceCompareRow > span{
+    min-width:0;
+  }
+  .performanceCompareHead > span:not(:first-child),
+  .performanceCompareRow > .performanceNumber{
+    justify-self:stretch;
+  }
+  .performanceCompareHead > span:not(:first-child){
+    text-align:center;
+  }
+  .performanceCompareHead > span:nth-child(8),
+  .performanceCompareRow > .performanceProgress{
+    text-align:center;
+  }
 }
 
 /* Active-now KPI uses the same visual language as the other KPI cards. */
