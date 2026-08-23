@@ -683,7 +683,9 @@ async function importFile(){
   }catch(e){msg.innerHTML=`<div class="importResult err">${esc(e.message)}</div>`}
 }
 function impactMetric(label,value,total,color,percent=false){const n=Number(value||0),pct=percent?n:((Number(total||0)?Math.round(n/Number(total)*100):0));return `<div class="impactMetric"><div><span>${label}</span><b>${percent?pct+"%":n}</b></div><i class="${color}" style="width:${Math.min(100,pct)}%"></i></div>`}
+let statsRenderToken=0;
 async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
+  const renderToken=++statsRenderToken;
   VIEW="stats";navActive("stats");title("تحليل الأداء","");
   const v=document.querySelector("#view");v.innerHTML=`<div class="loading">جاري بناء التحليل…</div>`;
   try{
@@ -698,18 +700,31 @@ async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
     const to=overrideTo!==null ? String(overrideTo||"") : (localStorage.getItem("statsTo")||"");
     if(from && to && from>to) throw Object.assign(Error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"),{status:400});
     const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selectedKey,from,to}).toString()}&_=${Date.now()}`);
+    if(renderToken!==statsRenderToken) return;
     const options=canCompare
       ? `<option value="all" ${selectedKey==="all"?'selected':''}>الكل</option>${users.map(x=>`<option value="${x.id}" ${String(x.id)===selectedKey?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("")}`
       : "";
     const compareRows=canCompare ? (d.comparison||[]).map(x=>`<button class="performanceCompareRow ${String(x.id)===String(d.manager?.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("") : "";
     const periodLabel=from||to ? `${esc(from||"بداية الفترة")} ← ${esc(to||"حتى الآن")}` : "كامل السجل";
     v.innerHTML=`<section class="section performancePage">
-      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser" onchange="selectStatsUser(this.value)">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}<small class="statsPeriodApplied">الفترة: ${periodLabel}</small></div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button class="primary" onclick="applyStats(${JSON.stringify(selectedKey)})">تحديث التحليل</button><button class="soft statsClearButton" onclick="clearStatsDates(${JSON.stringify(selectedKey)})">مسح التاريخ</button></div></div>
+      <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}<small class="statsPeriodApplied">الفترة: ${periodLabel}</small></div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button id="statsApplyBtn" type="button" class="primary">تحديث التحليل</button><button id="statsClearBtn" type="button" class="soft statsClearButton">مسح التاريخ</button></div></div>
       <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div>
       ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${periodLabel}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة للفترة المحددة</div>`}</div></section>`:""}
     </section>`;
+    const userSelect=document.querySelector("#statsUser");
+    const applyBtn=document.querySelector("#statsApplyBtn");
+    const clearBtn=document.querySelector("#statsClearBtn");
+    if(userSelect){
+      userSelect.addEventListener("change",()=>selectStatsUser(userSelect.value));
+    }
+    if(applyBtn){
+      applyBtn.addEventListener("click",()=>applyStats(selectedKey));
+    }
+    if(clearBtn){
+      clearBtn.addEventListener("click",()=>clearStatsDates(selectedKey));
+    }
     enhanceSelects(v);
-  }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
+  }catch(e){if(renderToken!==statsRenderToken)return;const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
 function getStatsFilters(id){
   const userEl=document.querySelector("#statsUser");
@@ -733,19 +748,19 @@ async function applyStats(id){
   localStorage.setItem("statsUserId",f.selected);
   localStorage.setItem("statsFrom",f.from);
   localStorage.setItem("statsTo",f.to);
-  const btn=document.querySelector(".statsPeriod .primary");
-  if(btn){btn.disabled=true;btn.dataset.originalText=btn.textContent;btn.textContent="جاري التحديث…";}
+  const btn=document.querySelector("#statsApplyBtn");
+  if(btn){btn.disabled=true;btn.textContent="جاري التحديث…";}
   try{
     await statsPage(f.selected,f.from,f.to);
-  }finally{
-    const b=document.querySelector(".statsPeriod .primary");
-    if(b){b.disabled=false;b.textContent=b.dataset.originalText||"تحديث التحليل";}
-  }
+  }catch(e){toast(e.message||"تعذر تحديث التحليل","err");}
 }
 function clearStatsDates(id){
   const f=getStatsFilters(id);
   localStorage.removeItem("statsFrom");
   localStorage.removeItem("statsTo");
+  const fromEl=document.querySelector("#statsFrom"),toEl=document.querySelector("#statsTo");
+  if(fromEl) fromEl.value="";
+  if(toEl) toEl.value="";
   statsPage(f.selected,"","");
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
