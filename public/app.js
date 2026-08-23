@@ -697,7 +697,7 @@ async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
     const from=overrideFrom!==null ? String(overrideFrom||"") : (localStorage.getItem("statsFrom")||"");
     const to=overrideTo!==null ? String(overrideTo||"") : (localStorage.getItem("statsTo")||"");
     if(from && to && from>to) throw Object.assign(Error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"),{status:400});
-    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selectedKey,from,to}).toString()}`);
+    const d=await api(`/api/manager-stats?${new URLSearchParams({manager_id:selectedKey,from,to}).toString()}&_=${Date.now()}`);
     const options=canCompare
       ? `<option value="all" ${selectedKey==="all"?'selected':''}>الكل</option>${users.map(x=>`<option value="${x.id}" ${String(x.id)===selectedKey?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("")}`
       : "";
@@ -711,24 +711,42 @@ async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
     enhanceSelects(v);
   }catch(e){const detail=e?.status?`${e.message} · HTTP ${e.status}`:e.message;v.innerHTML=errorState(detail,"statsPage");}
 }
-function selectStatsUser(id){
-  const from=document.querySelector("#statsFrom")?.value ?? localStorage.getItem("statsFrom") ?? "";
-  const to=document.querySelector("#statsTo")?.value ?? localStorage.getItem("statsTo") ?? "";
-  localStorage.setItem("statsUserId",String(id||"all"));
-  localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);
-  statsPage(String(id||"all"),from,to);
+function getStatsFilters(id){
+  const userEl=document.querySelector("#statsUser");
+  const fromEl=document.querySelector("#statsFrom");
+  const toEl=document.querySelector("#statsTo");
+  const selected=String(userEl?.value||id||localStorage.getItem("statsUserId")||"all");
+  const from=fromEl ? String(fromEl.value||"") : String(localStorage.getItem("statsFrom")||"");
+  const to=toEl ? String(toEl.value||"") : String(localStorage.getItem("statsTo")||"");
+  return {selected,from,to};
 }
-function applyStats(id){
-  const from=document.querySelector("#statsFrom")?.value||"",to=document.querySelector("#statsTo")?.value||"";
-  if(from && to && from>to){toast("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية","err");return;}
-  const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");
-  localStorage.setItem("statsFrom",from);localStorage.setItem("statsTo",to);localStorage.setItem("statsUserId",selected);
-  statsPage(selected,from,to);
+function selectStatsUser(id){
+  const f=getStatsFilters(id);
+  localStorage.setItem("statsUserId",f.selected);
+  localStorage.setItem("statsFrom",f.from);
+  localStorage.setItem("statsTo",f.to);
+  statsPage(f.selected,f.from,f.to);
+}
+async function applyStats(id){
+  const f=getStatsFilters(id);
+  if(f.from && f.to && f.from>f.to){toast("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية","err");return;}
+  localStorage.setItem("statsUserId",f.selected);
+  localStorage.setItem("statsFrom",f.from);
+  localStorage.setItem("statsTo",f.to);
+  const btn=document.querySelector(".statsPeriod .primary");
+  if(btn){btn.disabled=true;btn.dataset.originalText=btn.textContent;btn.textContent="جاري التحديث…";}
+  try{
+    await statsPage(f.selected,f.from,f.to);
+  }finally{
+    const b=document.querySelector(".statsPeriod .primary");
+    if(b){b.disabled=false;b.textContent=b.dataset.originalText||"تحديث التحليل";}
+  }
 }
 function clearStatsDates(id){
-  localStorage.removeItem("statsFrom");localStorage.removeItem("statsTo");
-  const selected=document.querySelector("#statsUser")?.value||String(id||localStorage.getItem("statsUserId")||"all");
-  statsPage(selected,"","");
+  const f=getStatsFilters(id);
+  localStorage.removeItem("statsFrom");
+  localStorage.removeItem("statsTo");
+  statsPage(f.selected,"","");
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
