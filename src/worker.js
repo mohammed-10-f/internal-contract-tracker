@@ -511,6 +511,12 @@ return json({record:withMeta(r),events:ev.results,stages})}
     rows=(await env.DB.prepare(touchedSql(" AND rs.user_id=?")).bind(managerId,...dateArgs).all()).results||[];
   }
   const total=rows.length,documented=rows.filter(r=>r.status==='final_documented').length,withdrawn=rows.filter(r=>r.status==='final_withdrawn').length;
+  // Current active workload: transactions that are currently sitting in the responsible
+  // stage for this responsible user, whether assigned from the start or reassigned later.
+  // This is a live snapshot and intentionally ignores the historical date filter.
+  const activeSql=`SELECT COUNT(DISTINCT r.id) AS n FROM records r JOIN record_stages rs ON rs.record_id=r.id AND rs.stage='responsible' AND rs.ended_at IS NULL WHERE r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') ${isAll?'':' AND rs.user_id=? AND r.responsible_user_id=?'}`;
+  const activeArgs=isAll?[]:[Number(manager.id),Number(manager.id)];
+  const activeNow=Number((await env.DB.prepare(activeSql).bind(...activeArgs).first())?.n||0);
   const overdueSql=`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.started_at IS NOT NULL ${isAll?'':' AND rs.user_id=?'}${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`;
   const overdueArgs=isAll?[...dateArgs,SLA_HOURS*3600]:[Number(manager.id),...dateArgs,SLA_HOURS*3600];
   const overdueStage=await env.DB.prepare(overdueSql).bind(...overdueArgs).all();
@@ -523,9 +529,10 @@ return json({record:withMeta(r),events:ev.results,stages})}
     const prows=pr.results||[];
     const pdel=await env.DB.prepare(`SELECT DISTINCT rs.record_id FROM record_stages rs JOIN records r ON r.id=rs.record_id WHERE rs.stage='responsible' AND rs.started_at IS NOT NULL AND rs.user_id=?${dateSql} GROUP BY rs.record_id HAVING SUM((julianday(COALESCE(rs.ended_at,CURRENT_TIMESTAMP))-julianday(rs.started_at))*86400)>=?`).bind(person.id,...dateArgs,SLA_HOURS*3600).all();
     const ids=new Set((pdel.results||[]).map(x=>Number(x.record_id)));
-    comparison.push({id:person.id,name:person.name,username:person.username,role:person.role,total:prows.length,documented:prows.filter(r=>r.status==='final_documented').length,withdrawn:prows.filter(r=>r.status==='final_withdrawn').length,overdue:ids.size,closed_after_delay:prows.filter(r=>ids.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length});
+    const pact=await env.DB.prepare(`SELECT COUNT(DISTINCT r.id) AS n FROM records r JOIN record_stages rs ON rs.record_id=r.id AND rs.stage='responsible' AND rs.ended_at IS NULL WHERE r.status NOT IN ('final_documented','final_withdrawn','cancelled','stopped') AND rs.user_id=? AND r.responsible_user_id=?`).bind(person.id,person.id).first();
+    comparison.push({id:person.id,name:person.name,username:person.username,role:person.role,total:prows.length,documented:prows.filter(r=>r.status==='final_documented').length,withdrawn:prows.filter(r=>r.status==='final_withdrawn').length,active_now:Number(pact?.n||0),overdue:ids.size,closed_after_delay:prows.filter(r=>ids.has(Number(r.id))&&['final_documented','final_withdrawn'].includes(r.status)).length});
   }
-  return json({manager,filters:{from,to},total,documented,withdrawn,overdue,closed_after_delay:closedAfterDelay,comparison,report_date:reportDate()});
+  return json({manager,filters:{from,to},total,documented,withdrawn,active_now:activeNow,overdue,closed_after_delay:closedAfterDelay,comparison,report_date:reportDate()});
  }
  if(p==="/api/manager-records"&&req.method==="GET"){
   if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);

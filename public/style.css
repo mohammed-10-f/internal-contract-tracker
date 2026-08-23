@@ -1148,7 +1148,7 @@ select{
 .v4-reactivate-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
 .v4-reactivate-fields label span{display:block;font-size:9px;font-weight:700;color:var(--slate-600);margin-bottom:5px}
 .v4-reactivate-fields input,.v4-reactivate-fields select{width:100%;background:#fff}
-@media(max-width:900px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(5,minmax(82px,1fr));min-width:700px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
+@media(max-width:900px){.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(150px,1.2fr) repeat(7,minmax(82px,1fr)) 38px;min-width:900px}.v4-reactivate-fields{grid-template-columns:1fr}.recordInlineDetails .v4-body{grid-template-columns:1fr}}
 
 
 /* V20.1 — retained base interaction polish */
@@ -1228,7 +1228,7 @@ select{
 .statsSelectionUser{min-width:280px}.statsSelectionUser strong{display:block;font-size:17px;color:var(--ink-900);margin-top:5px}.statsSelectionUser .appSelect{margin-top:6px;width:min(390px,100%)}
 .statsPeriod{display:grid;grid-template-columns:145px 145px auto;gap:8px;align-items:end}.statsPeriod label{font-size:9px;color:var(--slate-500);font-weight:700}.statsPeriod input{margin-top:5px}
 .performanceKpis{margin-top:0}
-.performanceComparisonZone{padding:0;overflow:hidden}.performanceComparisonZone .chartHead{padding:18px 20px;border-bottom:1px solid var(--line-soft)}.performanceComparisonZone .chartHead h3{font-size:14px}.performanceCompare{overflow:auto}.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(250px,1.8fr) repeat(5,minmax(92px,1fr)) minmax(150px,1.35fr) 42px;display:grid;align-items:center;gap:10px;min-width:1120px}.performanceCompareHead{padding:11px 18px;background:var(--slate-50);border-bottom:1px solid var(--line);font-size:9px;color:var(--slate-500);font-weight:800;text-align:center}.performanceCompareHead span:first-child{text-align:right}.performanceCompareRow{width:100%;text-align:right;padding:13px 18px;border:0;border-bottom:1px solid var(--line-soft);background:#fff;font-size:11.5px;cursor:pointer;transition:.14s var(--ease)}.performanceCompareRow:hover{background:#fbfdff}.performanceCompareRow.current{background:var(--accent-50);box-shadow:inset -3px 0 0 var(--accent-500)}.performanceCompareRow strong{display:flex;flex-direction:column;gap:3px}.performanceCompareRow strong small{font-size:8.5px;color:var(--slate-500);font-weight:600}.performanceCompareRow b{text-align:center;font:700 12px var(--font-mono);color:var(--ink-900)}
+.performanceComparisonZone{padding:0;overflow:hidden}.performanceComparisonZone .chartHead{padding:18px 20px;border-bottom:1px solid var(--line-soft)}.performanceComparisonZone .chartHead h3{font-size:14px}.performanceCompare{overflow:auto}.performanceCompareHead,.performanceCompareRow{grid-template-columns:minmax(190px,1.45fr) repeat(7,minmax(92px,1fr)) 38px;display:grid;align-items:center;gap:10px;min-width:980px}.performanceCompareHead{padding:11px 18px;background:var(--slate-50);border-bottom:1px solid var(--line);font-size:9px;color:var(--slate-500);font-weight:800}.performanceCompareRow{width:100%;text-align:right;padding:13px 18px;border:0;border-bottom:1px solid var(--line-soft);background:#fff;font-size:11.5px;cursor:pointer;transition:.14s var(--ease)}.performanceCompareRow:hover{background:#fbfdff}.performanceCompareRow.current{background:var(--accent-50);box-shadow:inset -3px 0 0 var(--accent-500)}.performanceCompareRow strong{display:flex;flex-direction:column;gap:3px}.performanceCompareRow strong small{font-size:8.5px;color:var(--slate-500);font-weight:600}.performanceCompareRow b{text-align:center;font:700 12px var(--font-mono);color:var(--ink-900)}
 
 /* Permissions — same logic, cleaner visual language */
 .userModal{width:min(820px,94vw);padding:24px;background:var(--canvas);border:1px solid var(--line);border-radius:24px}
@@ -1473,3 +1473,6 @@ select{
   .performanceDetailLoading,.performanceDetailEmpty,.performanceDetailError{padding:18px;text-align:center;color:var(--slate-500);font-size:10px;background:#fff;border:1px dashed var(--line);border-radius:12px}
   .performanceDetailError{color:var(--danger-700);display:flex;justify-content:center;align-items:center;gap:10px}
 }
+
+.performanceNumber.activeNow b{color:var(--accent-700);background:var(--accent-50);border-color:#cfe0f2}
+.performanceKpis .statCard{min-height:92px}
