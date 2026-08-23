@@ -1421,3 +1421,55 @@ select{
 .statsPeriodApplied{display:block;margin-top:7px;color:var(--slate-400);font-size:9px;}
 .statsClearButton{height:40px;}
 @media(min-width:651px){.statsPeriod{grid-template-columns:145px 145px auto auto;}}
+
+/* V20.6.5 — interactive performance comparison (desktop only)
+   Keeps the existing mobile composition intact. */
+@media (min-width:981px){
+  .performanceComparisonZone{border-radius:22px;box-shadow:var(--sh-sm);}
+  .performanceComparisonZone .chartHead{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;background:linear-gradient(180deg,#fff 0%,#fbfcfe 100%)}
+  .performanceComparisonZone .chartHead h3{font-size:15px;margin:0}
+  .performanceComparisonZone .chartHead span{font-size:10px;color:var(--slate-500);font-weight:700;background:var(--slate-50);padding:6px 10px;border-radius:999px}
+  .performanceCompare{padding:10px 12px 14px;overflow:visible}
+  .performanceCompareHead,.performanceCompareRow{
+    grid-template-columns:minmax(280px,2fr) repeat(5,minmax(88px,1fr)) minmax(110px,.9fr) 32px;
+    min-width:0;
+  }
+  .performanceCompareHead{margin:0 0 4px;padding:10px 14px;background:#f6f8fb;border:1px solid var(--line-soft);border-radius:12px;font-size:9px;color:var(--slate-500);font-weight:800}
+  .performanceCompareItem{margin:4px 0;border:1px solid transparent;border-radius:16px;transition:border-color .16s var(--ease),box-shadow .16s var(--ease),background .16s var(--ease)}
+  .performanceCompareItem:hover{border-color:#dbe6f2;box-shadow:var(--sh-xs)}
+  .performanceCompareItem.is-expanded{border-color:#cfe0f2;box-shadow:0 8px 24px rgba(12,26,46,.07);background:#fbfdff}
+  .performanceCompareRow{width:100%;text-align:right;padding:14px;background:#fff;border:0;border-bottom:1px solid var(--line-soft);font-size:11.5px;cursor:pointer;transition:background .14s var(--ease)}
+  .performanceCompareItem:first-of-type .performanceCompareRow{border-radius:15px 15px 0 0}
+  .performanceCompareItem:not(.is-expanded) .performanceCompareRow{border-radius:15px}
+  .performanceCompareRow:hover{background:#fbfdff}
+  .performanceCompareRow.current{background:var(--accent-50);box-shadow:inset -3px 0 0 var(--accent-500)}
+  .performanceEmployee{display:flex;align-items:center;gap:10px;min-width:0}
+  .performanceAvatar{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border-radius:11px;background:var(--accent-100);color:var(--accent-700);font-weight:800;font-size:13px}
+  .performanceEmployee strong{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px;color:var(--ink-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .performanceEmployee strong small{font-size:8.5px;color:var(--slate-500);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .performanceNumber{text-align:center;display:flex;justify-content:center;align-items:center;min-width:0}
+  .performanceNumber b{font:700 12px var(--font-mono);color:var(--ink-900);background:#f8fafc;border:1px solid #edf1f5;border-radius:9px;min-width:30px;padding:4px 7px}
+  .performanceNumber.total b{background:var(--accent-50);border-color:#d9e8f8;color:var(--accent-700)}
+  .performanceNumber.hasIssue b{background:var(--danger-50);border-color:#f3d5d9;color:var(--danger-700)}
+  .performanceProgress{display:flex;align-items:center;gap:8px;min-width:0}
+  .performanceProgress>b{font:700 10px var(--font-mono);min-width:30px;text-align:right;color:var(--ink-800)}
+  .performanceProgress i{display:block;height:5px;flex:1;min-width:35px;background:#e7ebf0;border-radius:999px;overflow:hidden}
+  .performanceProgress i em{display:block;height:100%;background:var(--success-500);border-radius:inherit}
+  .performanceChevron{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#f4f7fa;color:var(--slate-500);font-size:14px;transition:transform .18s var(--ease),background .18s var(--ease)}
+  .performanceCompareItem.is-expanded .performanceChevron{transform:rotate(180deg);background:var(--accent-100);color:var(--accent-700)}
+  .performanceUserDetails{padding:0 14px 14px;border-top:1px solid var(--line-soft)}
+  .performanceDetailHead{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 8px 12px}
+  .performanceDetailHead h4{margin:2px 0 1px;font-size:12px}
+  .performanceDetailHead small{font-size:9px;color:var(--slate-500)}
+  .performanceDetailTable{display:grid;gap:6px}
+  .performanceTransaction{display:grid;grid-template-columns:58px minmax(0,1fr) 150px 24px;align-items:center;gap:12px;width:100%;text-align:right;padding:10px 12px;background:#fff;border:1px solid var(--line-soft);border-radius:12px;transition:.14s var(--ease)}
+  .performanceTransaction:hover{border-color:#cfe0f2;background:#fbfdff;transform:translateY(-1px)}
+  .performanceTxnNo{font:700 10px var(--font-mono);color:var(--accent-600)}
+  .performanceTransaction span:nth-child(2){display:flex;flex-direction:column;gap:2px;min-width:0}
+  .performanceTransaction span:nth-child(2) b{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .performanceTransaction span:nth-child(2) small{font-size:8.5px;color:var(--slate-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .performanceTransaction .v3-status{justify-self:center;white-space:nowrap}
+  .performanceTxnArrow{color:var(--accent-500);font-weight:800}
+  .performanceDetailLoading,.performanceDetailEmpty,.performanceDetailError{padding:18px;text-align:center;color:var(--slate-500);font-size:10px;background:#fff;border:1px dashed var(--line);border-radius:12px}
+  .performanceDetailError{color:var(--danger-700);display:flex;justify-content:center;align-items:center;gap:10px}
+}

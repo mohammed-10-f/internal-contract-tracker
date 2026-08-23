@@ -704,12 +704,12 @@ async function statsPage(managerId="", overrideFrom=null, overrideTo=null){
     const options=canCompare
       ? `<option value="all" ${selectedKey==="all"?'selected':''}>الكل</option>${users.map(x=>`<option value="${x.id}" ${String(x.id)===selectedKey?'selected':''}>${esc(x.name)} — ${esc(x.username)}</option>`).join("")}`
       : "";
-    const compareRows=canCompare ? (d.comparison||[]).map(x=>`<button class="performanceCompareRow ${String(x.id)===String(d.manager?.id)?'current':''}" onclick="selectStatsUser(${Number(x.id)})"><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)}</small></strong><b>${x.total}</b><b>${x.documented}</b><b>${x.withdrawn}</b><b>${x.overdue}</b><b>${x.closed_after_delay}</b></button>`).join("") : "";
+    const compareRows=canCompare ? (d.comparison||[]).map(x=>{const pct=x.total?Math.round((Number(x.documented||0)+Number(x.withdrawn||0))/Number(x.total)*100):0;return `<div class="performanceCompareItem" data-performance-user="${Number(x.id)}"><button class="performanceCompareRow ${String(x.id)===String(d.manager?.id)?'current':''}" type="button" onclick="togglePerformanceUser(${Number(x.id)})" aria-expanded="false"><span class="performanceEmployee"><span class="performanceAvatar">${esc((x.name||"م").trim().slice(0,1))}</span><strong>${esc(x.name)}<small>${esc(roleLabel[x.role]||x.role)} · ${esc(x.username||"")}</small></strong></span><span class="performanceNumber total"><b>${x.total}</b></span><span class="performanceNumber"><b>${x.documented}</b></span><span class="performanceNumber"><b>${x.withdrawn}</b></span><span class="performanceNumber ${x.overdue?'hasIssue':''}"><b>${x.overdue}</b></span><span class="performanceNumber"><b>${x.closed_after_delay}</b></span><span class="performanceProgress"><b>${pct}%</b><i><em style="width:${Math.min(100,pct)}%"></em></i></span><span class="performanceChevron">⌄</span></button><div class="performanceUserDetails" hidden></div></div>`}).join("") : "";
     const periodLabel=from||to ? `${esc(from||"بداية الفترة")} ← ${esc(to||"حتى الآن")}` : "كامل السجل";
     v.innerHTML=`<section class="section performancePage">
       <div class="statsSelectionBar"><div class="statsSelectionUser"><span class="eyebrow">${canCompare?'المستخدم':'أدائي'}</span>${canCompare?`<select id="statsUser">${options}</select>`:`<strong>${esc(d.manager?.name||ME.name)}</strong>`}<small class="statsPeriodApplied">الفترة: ${periodLabel}</small></div><div class="statsPeriod"><label>من<input id="statsFrom" type="date" value="${esc(from)}"></label><label>إلى<input id="statsTo" type="date" value="${esc(to)}"></label><button id="statsApplyBtn" type="button" class="primary">تحديث التحليل</button><button id="statsClearBtn" type="button" class="soft statsClearButton">مسح التاريخ</button></div></div>
       <div class="statsGrid performanceKpis">${stat("إجمالي المعاملات",d.total,"blue")}${stat("تم التوثيق",d.documented,"green")}${stat("منسحب الموظف",d.withdrawn,"orange")}${stat("المعاملات المتأخرة",d.overdue,"red")}${stat("أُغلقت بعد التأخير",d.closed_after_delay,"purple")}</div>
-      ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${periodLabel}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>المستخدم</span><span>إجمالي المعاملات</span><span>تم التوثيق</span><span>منسحب الموظف</span><span>المعاملات المتأخرة</span><span>أُغلقت بعد التأخير</span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة للفترة المحددة</div>`}</div></section>`:""}
+      ${canCompare?`<section class="chartCard performanceComparisonZone"><div class="chartHead"><h3>مقارنة المستخدمين</h3><span>${periodLabel}</span></div><div class="performanceCompare"><div class="performanceCompareHead"><span>الموظف</span><span>الإجمالي</span><span>تم التوثيق</span><span>منسحب</span><span>متأخر</span><span>أُغلق بعد التأخير</span><span>نسبة الإنجاز</span><span></span></div>${compareRows||`<div class="chartEmpty">لا توجد بيانات مقارنة للفترة المحددة</div>`}</div></section>`:""}
     </section>`;
     const userSelect=document.querySelector("#statsUser");
     const applyBtn=document.querySelector("#statsApplyBtn");
@@ -762,6 +762,33 @@ function clearStatsDates(id){
   if(fromEl) fromEl.value="";
   if(toEl) toEl.value="";
   statsPage(f.selected,"","");
+}
+async function togglePerformanceUser(id){
+  const item=document.querySelector(`.performanceCompareItem[data-performance-user="${Number(id)}"]`);
+  if(!item)return;
+  const row=item.querySelector('.performanceCompareRow');
+  const panel=item.querySelector('.performanceUserDetails');
+  if(!panel)return;
+  if(!panel.hidden){panel.hidden=true;row?.setAttribute('aria-expanded','false');item.classList.remove('is-expanded');return;}
+  document.querySelectorAll('.performanceUserDetails:not([hidden])').forEach(x=>{x.hidden=true;x.closest('.performanceCompareItem')?.classList.remove('is-expanded');x.closest('.performanceCompareItem')?.querySelector('.performanceCompareRow')?.setAttribute('aria-expanded','false');});
+  panel.hidden=false;item.classList.add('is-expanded');row?.setAttribute('aria-expanded','true');
+  panel.innerHTML=`<div class="performanceDetailLoading">جاري جلب معاملات الموظف…</div>`;
+  const from=document.querySelector('#statsFrom')?.value||localStorage.getItem('statsFrom')||'';
+  const to=document.querySelector('#statsTo')?.value||localStorage.getItem('statsTo')||'';
+  try{
+    const qs=new URLSearchParams({manager_id:String(id),from,to,_:Date.now()});
+    const d=await api('/api/manager-records?'+qs);
+    const rows=d.records||[];
+    panel.innerHTML=`<div class="performanceDetailHead"><div><span class="eyebrow">TRANSACTION LIST</span><h4>أحدث معاملات الموظف</h4><small>${rows.length?`عرض ${rows.length} معاملة ضمن الفترة المحددة`:'لا توجد معاملات ضمن الفترة المحددة'}</small></div><button type="button" class="soft" onclick="showStatsRecords(${Number(id)})">عرض جميع معاملات الموظف</button></div>${rows.length?`<div class="performanceDetailTable">${rows.map(r=>`<button type="button" class="performanceTransaction" onclick="showStatsRecords(${Number(id)})"><span class="performanceTxnNo">#${esc(r.id)}</span><span><b>${esc(r.employee_name||'—')} — ${esc(r.employee_no||'—')}</b><small>دخول المسؤول: ${fmtDateTime(r.responsible_started_at)} · معاملة التعيين: ${esc(r.transaction_no||'—')}</small></span><span class="v3-status ${['final_documented'].includes(r.status)?'is-done':['final_withdrawn','cancelled'].includes(r.status)?'is-danger':'is-pending'}">${esc(r.status_label)}</span><span class="performanceTxnArrow">←</span></button>`).join('')}</div>`:`<div class="performanceDetailEmpty">لا توجد معاملات مطابقة للفترة المحددة.</div>`}`;
+  }catch(e){panel.innerHTML=`<div class="performanceDetailError">${esc(e.message||'تعذر تحميل معاملات الموظف')}<button type="button" class="soft" onclick="togglePerformanceUser(${Number(id)})">إعادة المحاولة</button></div>`;}
+}
+async function showStatsRecords(id){
+  const from=document.querySelector('#statsFrom')?.value||localStorage.getItem('statsFrom')||'';
+  const to=document.querySelector('#statsTo')?.value||localStorage.getItem('statsTo')||'';
+  await list('');
+  const mf=document.querySelector('#managerFilter');if(mf)mf.value=String(id);
+  const ff=document.querySelector('#fromFilter'),tf=document.querySelector('#toFilter');if(ff)ff.value=from;if(tf)tf.value=to;
+  await loadRecords();
 }
 function analysisBar(label,value,max){const p=max?Math.round(value/max*100):0;return `<div class="analysisBar"><div><span>${esc(label)}</span><b>${value}</b></div><i><em style="width:${p}%"></em></i></div>`;}
 function bars(items){if(!items?.length)return `<div class="chartEmpty">لا توجد بيانات</div>`;const max=Math.max(...items.map(x=>x.count),1);return `<div class="bars">${items.map(x=>`<div class="barCol"><b>${x.count}</b><i style="height:${Math.max(8,Math.round(x.count/max*150))}px"></i><small>${esc(x.month)}</small></div>`).join("")}</div>`;}
@@ -934,7 +961,7 @@ document.addEventListener("pointerdown",e=>{
   const field=wrapper?.querySelector("input[type=date],input[type=datetime-local]");
   if(field){ e.preventDefault(); try{ field.showPicker?.(); }catch{ try{field.focus();}catch{} } }
 });
-window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.downloadUsersTemplate=downloadUsersTemplate;window.importUsersFile=importUsersFile;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;window.toggleMobileMore=toggleMobileMore;window.togglePassword=togglePassword;
+window.loadMoreRecords=loadMoreRecords;window.uploadPage=uploadPage;window.quickResponsible=quickResponsible;window.quickResponsibleSubmit=quickResponsibleSubmit;window.quickResponsibleWithdraw=quickResponsibleWithdraw;window.quickResponsibleWithdrawSubmit=quickResponsibleWithdrawSubmit;window.quickApprove=quickApprove;window.dash=dash;window.list=list;window.loadRecords=loadRecords;window.openRecord=openRecord;window.closeRecord=closeRecord;window.add=add;window.save=save;window.bulk=bulk;window.importFile=importFile;window.downloadUploadTemplate=downloadUploadTemplate;window.statsPage=statsPage;window.applyStats=applyStats;window.togglePerformanceUser=togglePerformanceUser;window.showStatsRecords=showStatsRecords;window.exportStats=exportStats;window.exportFromList=exportFromList;window.users=users;window.downloadUsersTemplate=downloadUsersTemplate;window.importUsersFile=importUsersFile;window.userForm=userForm;window.togglePermGroup=togglePermGroup;window.userFormById=userFormById;window.saveUser=saveUser;window.toggleUser=toggleUser;window.resetUserPassword=resetUserPassword;window.createDelegation=createDelegation;window.revokeDelegation=revokeDelegation;window.auditPage=auditPage;window.loadAudit=loadAudit;window.exportAudit=exportAudit;window.perform=perform;window.withdrawForm=withdrawForm;window.reassign=reassign;window.logout=logout;window.toggleMobileMore=toggleMobileMore;window.togglePassword=togglePassword;
 boot();
 
 

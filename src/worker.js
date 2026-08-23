@@ -527,6 +527,25 @@ return json({record:withMeta(r),events:ev.results,stages})}
   }
   return json({manager,filters:{from,to},total,documented,withdrawn,overdue,closed_after_delay:closedAfterDelay,comparison,report_date:reportDate()});
  }
+ if(p==="/api/manager-records"&&req.method==="GET"){
+  if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);
+  const requestedRaw=String(url.searchParams.get("manager_id")||"").trim(),from=url.searchParams.get("from")||"",to=url.searchParams.get("to")||"";
+  const managerId=u.role==="responsible"?u.id:Number(requestedRaw||0);
+  if(u.role==="responsible" && requestedRaw && managerId!==u.id)return json({error:"غير مصرح"},403);
+  if(!managerId)return json({error:"اختر المستخدم المسؤول"},400);
+  if(from&&to&&from>to)return json({error:"تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"},400);
+  const args=[managerId];
+  let sql=`SELECT DISTINCT r.id,r.employee_no,r.employee_name,r.transaction_no,r.transaction_date,r.start_date,r.status,r.updated_at,rs.started_at responsible_started_at,ru.name responsible_user_name
+           FROM records r
+           JOIN record_stages rs ON rs.record_id=r.id AND rs.stage='responsible' AND rs.user_id=?
+           LEFT JOIN users ru ON ru.id=r.responsible_user_id
+           WHERE rs.started_at IS NOT NULL`;
+  if(from){sql+=` AND date(datetime(rs.started_at,'+3 hours'))>=?`;args.push(from)}
+  if(to){sql+=` AND date(datetime(rs.started_at,'+3 hours'))<=?`;args.push(to)}
+  sql+=` ORDER BY rs.started_at DESC LIMIT 12`;
+  const rows=(await env.DB.prepare(sql).bind(...args).all()).results||[];
+  return json({records:rows.map(r=>({...r,status_label:labels[r.status]||r.status||"—"})),manager_id:managerId,filters:{from,to}});
+ }
  if(p==="/api/stats-users"&&req.method==="GET"){if(!allowRoleFallback(u,"view_stats")&&u.role!=="responsible")return json({error:"ليس لديك صلاحية إحصائيات الأداء"},403);if(u.role==="responsible")return json({users:[{id:u.id,name:u.name,username:u.username,role:u.role,active:u.active}]});const rows=await env.DB.prepare("SELECT id,username,name,role,active FROM users WHERE active=1 AND role='responsible' ORDER BY name").all();return json({users:rows.results});}
  if(p==="/api/users"&&req.method==="GET"){if(!allow(u,"manage_users"))return json({error:"ليس لديك صلاحية إدارة المستخدمين"},403);const rows=await env.DB.prepare("SELECT id,username,name,role,active,permissions,created_at FROM users ORDER BY id DESC").all();return json({users:rows.results.map(x=>({...x,permissions:permsOf(x)}))})}
  if(p==="/api/users/bulk"&&req.method==="POST"){
