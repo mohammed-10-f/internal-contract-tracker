@@ -1476,3 +1476,35 @@ select{
 
 .performanceNumber.activeNow b{color:var(--accent-700);background:var(--accent-50);border-color:#cfe0f2}
 .performanceKpis .statCard{min-height:92px}
+
+/* V20.6.9 — Performance KPI visual alignment (desktop)
+   No workflow or responsive/mobile layout changes. */
+@media (min-width:1101px){
+  .statsGrid.performanceKpis{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:13px;
+    align-items:stretch;
+  }
+  .performanceKpis .statCard{
+    min-width:0;
+    min-height:104px;
+    height:104px;
+    box-sizing:border-box;
+  }
+  .performanceKpis .statCard>div{
+    min-width:0;
+    min-height:58px;
+    display:flex;
+    flex:1 1 auto;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .performanceKpis .statCard small,
+  .performanceKpis .statCard em{
+    line-height:1.45;
+  }
+  .performanceKpis .statCard strong{line-height:1.15;}
+}
+
+/* Active-now KPI uses the same visual language as the other KPI cards. */
+.statIcon.teal{background:#e4f7f3;color:#0f8b73}

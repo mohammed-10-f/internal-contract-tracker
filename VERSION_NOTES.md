@@ -42,3 +42,9 @@
 - توحيد رقم الإصدار في ملفات المشروع.
 - تحسين تنظيم وتعليقات الملفات الرئيسية دون تغيير واجهة المستخدم أو مسارات API أو الصلاحيات أو منطق المعاملات.
 - لا توجد تغييرات وظيفية مقصودة في هذه النسخة.
+
+## V20.6.9 — Performance KPI visual alignment
+- Desktop performance KPI cards now use six equal columns so all six indicators stay on one aligned row at supported desktop widths.
+- KPI cards have a consistent visual height and vertically centered content.
+- Added the missing teal visual treatment for the "المعاملات النشطة الآن" indicator.
+- No business logic, API, workflow, permissions, or mobile layout changes.
